@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PassportCard — Inventory Management</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--primary:#0A2540;--accent:#635BFF;--accent-light:#EEF0FF;--success:#0E9F6E;--success-light:#E8F5F0;--warning:#D97706;--warning-light:#FEF3C7;--danger:#DC2626;--danger-light:#FEE2E2;--border:#E5E7EB;--muted:#6B7280;--bg:#F9FAFB;}
+  *{box-sizing:border-box;}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--primary);margin:0;}
+  .sidebar{width:220px;min-height:100vh;background:var(--primary);position:fixed;top:0;left:0;z-index:10;}
+  .main{margin-left:220px;min-height:100vh;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:#94A3B8;cursor:pointer;transition:all .15s;border-radius:6px;margin:2px 10px;font-size:14px;}
+  .nav-item:hover{color:#fff;background:rgba(255,255,255,0.08);}
+  .nav-item.active{color:#fff;background:rgba(99,91,255,0.3);}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:24px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500;}
+  .badge-success{background:var(--success-light);color:var(--success);}
+  .badge-warning{background:var(--warning-light);color:var(--warning);}
+  .badge-danger{background:var(--danger-light);color:var(--danger);}
+  .badge-accent{background:var(--accent-light);color:var(--accent);}
+  .badge-gray{background:#F3F4F6;color:var(--muted);}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#4f46e5;}
+  .btn-outline{background:#fff;color:var(--primary);border:1px solid var(--border);}
+  .btn-outline:hover{background:var(--bg);}
+  .btn-google{background:#fff;color:#374151;border:1px solid var(--border);width:100%;justify-content:center;padding:12px;font-size:14px;}
+  .btn-google:hover{background:#F9FAFB;}
+  .progress-bar{height:6px;background:#F3F4F6;border-radius:99px;overflow:hidden;}
+  .progress-fill{height:100%;border-radius:99px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;padding:10px 14px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
+  td{padding:12px 14px;border-bottom:1px solid #F3F4F6;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:#FAFAFA;}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:#fff;border-radius:12px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+  .input{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;outline:none;transition:border .15s;font-family:inherit;}
+  .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,91,255,0.1);}
+  select.input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;}
+  [data-page]{display:none;}
+  [data-page].active{display:block;}
+  .stat-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px;}
+  .alert-row{padding:14px 18px;border-radius:8px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px;}
+  .alert-critical{background:var(--danger-light);border:1px solid #FCA5A5;}
+  .alert-warning{background:var(--warning-light);border:1px solid #FDE68A;}
+  .alert-info{background:var(--accent-light);border:1px solid #C7D2FE;}
+  .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:40px 24px;text-align:center;cursor:pointer;transition:all .2s;}
+  .drop-zone:hover{border-color:var(--accent);background:var(--accent-light);}
+  .spinner{width:20px;height:20px;border:2px solid #E5E7EB;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #login-screen{position:fixed;inset:0;background:#fff;z-index:200;display:flex;align-items:center;justify-content:center;}
+  .login-card{width:380px;padding:40px;border:1px solid var(--border);border-radius:16px;text-align:center;}
+  #toast{display:none;position:fixed;bottom:24px;right:24px;background:#0A2540;color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.2);align-items:center;gap:10px;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div style="font-weight:700;font-size:22px;margin-bottom:4px;">PassportCard</div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:32px;">Inventory Management System</div>
+    <button class="btn btn-google" onclick="signInGoogle()" id="google-btn">
+      <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+    <div id="login-error" style="display:none;margin-top:16px;background:var(--danger-light);color:var(--danger);padding:10px 14px;border-radius:8px;font-size:13px;"></div>
+    <div style="margin-top:24px;font-size:12px;color:var(--muted);">Access restricted to PassportCard staff</div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="app-sidebar" style="display:none;">
+  <div style="padding:24px 20px 16px;">
+    <div style="color:#fff;font-weight:700;font-size:16px;">PassportCard</div>
+    <div style="color:#64748B;font-size:11px;margin-top:2px;">Inventory Management</div>
+  </div>
+  <div style="margin-top:8px;">
+    <div class="nav-item active" onclick="nav('dashboard',this)"><i data-lucide="layout-dashboard" style="width:16px;height:16px;"></i> Dashboard</div>
+    <div class="nav-item" onclick="nav('inventory',this)"><i data-lucide="layers" style="width:16px;height:16px;"></i> Inventory</div>
+    <div class="nav-item" onclick="nav('orders',this)"><i data-lucide="package" style="width:16px;height:16px;"></i> Orders</div>
+    <div class="nav-item" onclick="nav('agencies',this)"><i data-lucide="building-2" style="width:16px;height:16px;"></i> Agencies</div>
+    <div class="nav-item" onclick="nav('planning',this)"><i data-lucide="calendar" style="width:16px;height:16px;"></i> Annual Planning</div>
+    <div class="nav-item" onclick="nav('alerts',this)"><i data-lucide="bell" style="width:16px;height:16px;"></i> Alerts <span id="alert-badge" style="display:none;background:#DC2626;color:#fff;font-size:10px;padding:1px 6px;border-radius:99px;margin-left:auto;"></span></div>
+    <div class="nav-item" onclick="nav('import',this)"><i data-lucide="upload" style="width:16px;height:16px;"></i> Import</div>
+    <div class="nav-item" id="nav-users" style="display:none;" onclick="nav('users',this)"><i data-lucide="users" style="width:16px;height:16px;"></i> Users</div>
+  </div>
+  <div style="position:absolute;bottom:24px;left:0;right:0;padding:0 10px;">
+    <div style="border-top:1px solid #1E3A5F;padding-top:16px;padding-left:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div id="user-avatar" style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;"></div>
+        <div>
+          <div id="user-name" style="color:#94A3B8;font-weight:500;font-size:12px;"></div>
+          <div id="user-role-label" style="color:#635BFF;font-size:10px;margin-top:1px;"></div>
+        </div>
+      </div>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px;font-size:11px;padding:6px;" onclick="signOut()">
+        <i data-lucide="log-out" style="width:12px;height:12px;"></i> Sign Out
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="app-main" style="display:none;">
+  <div style="background:#fff;border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:9;">
+    <div id="page-title" style="font-weight:600;font-size:15px;">Dashboard</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div style="font-size:12px;color:var(--muted);" id="today-date"></div>
+      <button class="btn btn-primary" onclick="openModal('order-modal')"><i data-lucide="plus" style="width:14px;height:14px;"></i> New Order</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div data-page="dashboard" class="active" style="padding:32px;">
+    <div id="alerts-banner" style="display:none;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 18px;margin-bottom:24px;align-items:center;gap:10px;">
+      <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#DC2626;flex-shrink:0;"></i>
+      <span id="alerts-banner-text" style="font-size:13px;color:#991B1B;font-weight:500;"></span>
+      <button class="btn btn-outline" style="margin-left:auto;font-size:12px;padding:5px 12px;" onclick="nav('alerts',document.querySelector('[onclick*=alerts]'))">View Alerts</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Blanks in Poland</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;" id="kpi-blanks"><div class="spinner"></div></div><div style="font-size:12px;color:var(--muted);">Available for personalization</div></div>
+      <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">In Transit</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;" id="kpi-transit"><div class="spinner"></div></div><div style="font-size:12px;color:var(--muted);" id="kpi-transit-eta">—</div></div>
+      <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">HQ Stock</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;" id="kpi-hq"><div class="spinner"></div></div><div style="font-size:12px;color:var(--muted);">Ready to distribute</div></div>
+      <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Active Alerts</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;" id="kpi-alerts"><div class="spinner"></div></div><div style="font-size:12px;color:var(--muted);">Require attention</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="card">
+        <div style="font-weight:600;font-size:14px;margin-bottom:16px;">Agency Stock Overview</div>
+        <div id="agency-overview-list"><div class="spinner" style="margin:20px auto;display:block;"></div></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;font-size:14px;margin-bottom:16px;">Recent Activity</div>
+        <div id="recent-activity"><div class="spinner" style="margin:20px auto;display:block;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div data-page="inventory" style="padding:32px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;">
+      <div class="stat-card" style="border-top:3px solid var(--primary);"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Blanks — Poland</div><div style="font-size:28px;font-weight:700;margin:10px 0 4px;" id="inv-blanks">—</div></div>
+      <div class="stat-card" style="border-top:3px solid var(--accent);"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">In Transit</div><div style="font-size:28px;font-weight:700;margin:10px 0 4px;" id="inv-transit">—</div></div>
+      <div class="stat-card" style="border-top:3px solid var(--success);"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">HQ Stock</div><div style="font-size:28px;font-weight:700;margin:10px 0 4px;" id="inv-hq">—</div></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="font-weight:600;font-size:14px;">Agency Inventory</div>
+        <button class="btn btn-outline" onclick="openModal('distribute-modal')"><i data-lucide="send" style="width:13px;height:13px;"></i> Distribute</button>
+      </div>
+      <table><thead><tr><th>Agency</th><th>Stock</th><th>Reserve</th><th>Buffer</th><th>Avg Daily</th><th>Days Left</th><th>Status</th></tr></thead>
+      <tbody id="inv-agency-table"><tr><td colspan="7" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></td></tr></tbody></table>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div style="font-weight:600;font-size:14px;margin-bottom:16px;">Movement Log</div>
+      <table><thead><tr><th>Date</th><th>Type</th><th>Agency</th><th>Qty</th><th>Ref</th><th>By</th></tr></thead>
+      <tbody id="movement-log-table"><tr><td colspan="6" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div data-page="orders" style="padding:32px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <div style="font-weight:600;font-size:16px;">Orders</div>
+      <button class="btn btn-primary" onclick="openModal('order-modal')"><i data-lucide="plus" style="width:14px;height:14px;"></i> New Order</button>
+    </div>
+    <div class="card">
+      <table><thead><tr><th>Order ID</th><th>Type</th><th>Agency</th><th>Qty</th><th>Ordered</th><th>ETA</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="orders-table"><tr><td colspan="8" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- AGENCIES -->
+  <div data-page="agencies" style="padding:32px;">
+    <div style="font-weight:600;font-size:16px;margin-bottom:24px;">Agencies</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;" id="agencies-grid">
+      <div style="text-align:center;padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>
+    </div>
+  </div>
+
+  <!-- PLANNING -->
+  <div data-page="planning" style="padding:32px;">
+    <div id="plan-empty" style="text-align:center;padding:60px 24px;">
+      <i data-lucide="calendar-x" style="width:48px;height:48px;color:#D1D5DB;margin:0 auto 16px;display:block;"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px;">No forecast loaded</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:24px;">Upload a demand forecast file from the Import page to generate the annual order plan.</div>
+      <button class="btn btn-primary" onclick="nav('import',null)"><i data-lucide="upload" style="width:14px;height:14px;"></i> Go to Import</button>
+    </div>
+    <div id="plan-content" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div><div style="font-weight:700;font-size:18px;" id="plan-title">Annual Order Plan</div><div style="font-size:13px;color:var(--muted);margin-top:4px;" id="plan-subtitle"></div></div>
+        <button class="btn btn-primary" onclick="exportPlan()"><i data-lucide="download" style="width:13px;height:13px;"></i> Export CSV</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;" id="plan-kpis"></div>
+      <div class="card" style="overflow-x:auto;padding:0;margin-bottom:24px;"><table id="plan-table" style="font-size:12px;"></table></div>
+      <div class="card"><div style="font-weight:600;font-size:14px;margin-bottom:16px;">Recommended Order Schedule</div>
+        <table><thead><tr><th>Agency</th><th>Order Month</th><th>Quantity</th><th>Cards Arrive</th><th>Priority</th></tr></thead>
+        <tbody id="plan-schedule"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div data-page="alerts" style="padding:32px;">
+    <div style="font-weight:600;font-size:16px;margin-bottom:20px;">Alerts</div>
+    <div id="alerts-list"><div class="spinner" style="margin:40px auto;display:block;"></div></div>
+    <div class="card" style="margin-top:24px;">
+      <div style="font-weight:600;font-size:14px;margin-bottom:16px;">Reorder Forecast — Next 90 Days</div>
+      <table><thead><tr><th>Agency</th><th>Stock</th><th>Daily Usage</th><th>Days to Reserve</th><th>Order By</th><th>Suggested Qty</th></tr></thead>
+      <tbody id="reorder-forecast"></tbody></table>
+    </div>
+  </div>
+
+  <!-- IMPORT -->
+  <div data-page="import" style="padding:32px;">
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:28px;">
+      <div id="itab-poland" onclick="switchImportTab('poland')" style="padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent);">Poland Stock</div>
+      <div id="itab-agencies" onclick="switchImportTab('agencies')" style="padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);">Agency Stock</div>
+      <div id="itab-forecast" onclick="switchImportTab('forecast')" style="padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);">Demand Forecast</div>
+    </div>
+    <div id="import-poland"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Upload Poland Stock File</div>
+        <div class="drop-zone" onclick="document.getElementById('poland-file').click()"><i data-lucide="upload-cloud" style="width:32px;height:32px;color:var(--accent);margin-bottom:12px;"></i><div style="font-size:14px;font-weight:500;margin-bottom:4px;">Drop CSV here or click to browse</div><input type="file" id="poland-file" style="display:none;" accept=".csv,.xlsx" onchange="handleImport(event,'poland')"></div>
+        <button class="btn btn-outline" style="margin-top:12px;font-size:12px;" onclick="loadSampleAndSave('poland')"><i data-lucide="file-text" style="width:12px;height:12px;"></i> Apply sample data</button>
+      </div>
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Format</div>
+        <div style="background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;line-height:1.8;">batch_id, date, blanks_total,<br>blanks_available, personalized_ready,<br>personalized_agency, quantity, status</div>
+      </div>
+    </div></div>
+    <div id="import-agencies" style="display:none;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Upload Agency Stock File</div>
+        <div class="drop-zone" onclick="document.getElementById('agencies-file').click()"><i data-lucide="upload-cloud" style="width:32px;height:32px;color:var(--accent);margin-bottom:12px;"></i><div style="font-size:14px;font-weight:500;margin-bottom:4px;">Drop CSV here or click to browse</div><input type="file" id="agencies-file" style="display:none;" accept=".csv,.xlsx" onchange="handleImport(event,'agencies')"></div>
+        <button class="btn btn-outline" style="margin-top:12px;font-size:12px;" onclick="loadSampleAndSave('agencies')"><i data-lucide="file-text" style="width:12px;height:12px;"></i> Apply sample data</button>
+      </div>
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Format</div>
+        <div style="background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;line-height:1.8;">agency, current_stock, report_date,<br>issued_since_last_report</div>
+      </div>
+    </div></div>
+    <div id="import-forecast" style="display:none;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Upload Demand Forecast</div>
+        <div class="drop-zone" onclick="document.getElementById('forecast-file').click()"><i data-lucide="bar-chart-2" style="width:32px;height:32px;color:var(--accent);margin-bottom:12px;"></i><div style="font-size:14px;font-weight:500;margin-bottom:4px;">Drop CSV here or click to browse</div><input type="file" id="forecast-file" style="display:none;" accept=".csv,.xlsx" onchange="handleImport(event,'forecast')"></div>
+        <button class="btn btn-outline" style="margin-top:12px;font-size:12px;" onclick="loadSampleAndSave('forecast')"><i data-lucide="file-text" style="width:12px;height:12px;"></i> Apply sample forecast</button>
+      </div>
+      <div><div style="font-weight:600;font-size:14px;margin-bottom:6px;">Format</div>
+        <div style="background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;line-height:1.8;">agency,Jan,Feb,Mar,Apr,May,Jun,<br>Jul,Aug,Sep,Oct,Nov,Dec</div>
+        <div style="margin-top:10px;background:var(--success-light);border-radius:8px;padding:10px;font-size:12px;color:#065F46;">System applies 35% pickup rate automatically</div>
+      </div>
+    </div></div>
+    <div class="card" style="margin-top:32px;"><div style="font-weight:600;font-size:14px;margin-bottom:16px;">Import History</div>
+      <table><thead><tr><th>Date</th><th>Type</th><th>File</th><th>By</th><th>Result</th></tr></thead>
+      <tbody id="import-history-table"><tr><td colspan="5" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div data-page="users" style="padding:32px;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div style="font-weight:600;font-size:14px;">Users</div>
+        <button class="btn btn-primary" onclick="openModal('add-user-modal')"><i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add User</button>
+      </div>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Agency</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="users-table"><tr><td colspan="6" style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></td></tr></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ORDER MODAL -->
+<div class="modal-overlay" id="order-modal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div style="font-weight:600;font-size:15px;">New Order</div><button onclick="closeModal('order-modal')" style="background:none;border:none;cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button></div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Order Type</label>
+        <select class="input" id="order-type" onchange="toggleOrderFields()"><option value="personalized">Personalized Cards</option><option value="blanks">Blank Cards</option><option value="distribution">Distribution HQ→Agency</option></select></div>
+      <div id="order-agency-row"><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Agency</label>
+        <select class="input" id="order-agency-select"></select></div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Quantity</label><input class="input" id="order-qty" type="number" min="1000" step="1000" placeholder="e.g. 5000"></div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;" id="order-eta-label">Expected Arrival (auto: +42 days)</label><input class="input" id="order-eta" type="text" readonly style="background:var(--bg);color:var(--muted);"></div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Notes</label><input class="input" id="order-notes" type="text" placeholder="Optional"></div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-outline" style="flex:1;justify-content:center;" onclick="closeModal('order-modal')">Cancel</button><button class="btn btn-primary" style="flex:2;justify-content:center;" onclick="submitOrder()"><i data-lucide="check" style="width:14px;height:14px;"></i> Submit Order</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- DISTRIBUTE MODAL -->
+<div class="modal-overlay" id="distribute-modal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div style="font-weight:600;font-size:15px;">Distribute from HQ</div><button onclick="closeModal('distribute-modal')" style="background:none;border:none;cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button></div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Agency</label><select class="input" id="dist-agency"></select></div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Quantity</label><input class="input" id="dist-qty" type="number" min="1" placeholder="e.g. 2000"></div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Notes</label><input class="input" id="dist-notes" type="text" placeholder="Optional"></div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-outline" style="flex:1;justify-content:center;" onclick="closeModal('distribute-modal')">Cancel</button><button class="btn btn-primary" style="flex:2;justify-content:center;" onclick="submitDistribution()"><i data-lucide="send" style="width:14px;height:14px;"></i> Confirm</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-overlay" id="add-user-modal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><div style="font-weight:600;font-size:15px;">Add User</div><button onclick="closeModal('add-user-modal')" style="background:none;border:none;cursor:pointer;"><i data-lucide="x" style="width:18px;height:18px;"></i></button></div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="background:var(--accent-light);border-radius:8px;padding:12px;font-size:12px;color:#3730A3;">Users are added via Google Sign-In. Ask the user to log in with their Google account. You can then set their role here after their first login.</div>
+      <div><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Role</label>
+        <select class="input" id="new-user-role" onchange="toggleNewUserAgency()"><option value="hq_admin">HQ Admin</option><option value="hq_manager" selected>HQ Inventory Manager</option><option value="agency_coordinator">Agency Coordinator</option></select></div>
+      <div id="new-user-agency-row" style="display:none;"><label style="font-size:12px;font-weight:500;color:var(--muted);display:block;margin-bottom:6px;">Agency</label><select class="input" id="new-user-agency"></select></div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-outline" style="flex:1;justify-content:center;" onclick="closeModal('add-user-modal')">Cancel</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#0A2540;color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.2);align-items:center;gap:10px;"><i data-lucide="check-circle" style="width:16px;height:16px;color:#0E9F6E;"></i><span id="toast-msg"></span></div>
+
+<script>
+const SUPABASE_URL = 'https://bahclkfdruudcoxuzrqt.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhaGNsa2ZkcnV1ZGNveHV6cnF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMzgxODQsImV4cCI6MjA4NzYxNDE4NH0._8SQeTCDC-Z7pNKAi_7wKQx5FjL8l2M8GxtiLAxC6Js';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const ROLE_LABELS = {hq_admin:'HQ Admin',hq_manager:'HQ Manager',agency_coordinator:'Agency Coordinator'};
+const LEAD_DAYS = 42;
+
+let currentUser = null, currentProfile = null, agencies = [];
+
+// AUTH
+async function signInGoogle() {
+  const btn = document.getElementById('google-btn');
+  btn.innerHTML = '<div class="spinner"></div> Signing in...';
+  btn.disabled = true;
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href }
+  });
+  if (error) {
+    document.getElementById('login-error').textContent = error.message;
+    document.getElementById('login-error').style.display = 'block';
+    btn.innerHTML = 'Continue with Google';
+    btn.disabled = false;
+  }
+}
+
+async function signOut() { await sb.auth.signOut(); location.reload(); }
+
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) { currentUser = session.user; await loadProfile(); showApp(); }
+  sb.auth.onAuthStateChange(async (_e, session) => {
+    if (session && !currentUser) { currentUser = session.user; await loadProfile(); showApp(); }
+  });
+}
+
+async function loadProfile() {
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  if (data) { currentProfile = data; return; }
+  const { data: np } = await sb.from('profiles').insert({ id: currentUser.id, role: 'hq_manager' }).select().single();
+  currentProfile = np;
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-sidebar').style.display = 'block';
+  document.getElementById('app-main').style.display = 'block';
+  const name = currentUser.user_metadata?.full_name || currentUser.email;
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-role-label').textContent = ROLE_LABELS[currentProfile?.role] || 'Staff';
+  if (currentProfile?.role === 'hq_admin') document.getElementById('nav-users').style.display = 'flex';
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  loadAllData();
+  lucide.createIcons();
+}
+
+// DATA
+async function loadAllData() {
+  await loadAgencies();
+  loadDashboard(); loadInventory(); loadOrders();
+  loadAlerts(); loadImportHistory(); loadForecast();
+  loadAgenciesPage();
+  if (currentProfile?.role === 'hq_admin') loadUsers();
+}
+
+async function loadAgencies() {
+  const { data } = await sb.from('agencies').select('*').eq('is_active',true).order('name');
+  agencies = data || [];
+  ['order-agency-select','dist-agency','new-user-agency'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = agencies.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  });
+}
+
+async function loadDashboard() {
+  const { data: poland } = await sb.from('poland_inventory').select('*').order('report_date',{ascending:false}).limit(1).single();
+  document.getElementById('kpi-blanks').textContent = poland ? fmt(poland.blanks_available) : '0';
+
+  const { data: transit } = await sb.from('orders').select('quantity').eq('status','in_transit');
+  const tQty = (transit||[]).reduce((s,o)=>s+o.quantity,0);
+  document.getElementById('kpi-transit').textContent = fmt(tQty);
+
+  const { data: hqMov } = await sb.from('inventory_movements').select('quantity').is('agency_id',null);
+  document.getElementById('kpi-hq').textContent = fmt(Math.max(0,(hqMov||[]).reduce((s,m)=>s+m.quantity,0)));
+
+  const { data: alertsData, count } = await sb.from('alerts').select('*',{count:'exact'}).eq('status','active');
+  document.getElementById('kpi-alerts').textContent = count || 0;
+  if (count > 0) {
+    document.getElementById('alert-badge').textContent = count;
+    document.getElementById('alert-badge').style.display = 'inline';
+    const criticals = (alertsData||[]).filter(a=>a.severity==='critical');
+    const banner = document.getElementById('alerts-banner');
+    banner.style.display = 'flex';
+    document.getElementById('alerts-banner-text').textContent =
+      criticals.length ? `${criticals.length} critical alert${criticals.length>1?'s':''} require immediate attention`
+                       : `${count} alert${count>1?'s':''} require attention`;
+  }
+
+  const { data: stocks } = await sb.from('v_current_agency_stock').select('*');
+  const el = document.getElementById('agency-overview-list');
+  if (!stocks?.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;">No data yet. Import agency stock.</div>'; }
+  else el.innerHTML = stocks.map(s => {
+    const pct = Math.min(100, Math.round(s.current_stock / (s.reserve_threshold * 2) * 100));
+    const color = s.stock_status==='critical'?'var(--danger)':s.stock_status==='warning'?'var(--warning)':'var(--success)';
+    const badge = s.stock_status==='critical'?'badge-danger':s.stock_status==='warning'?'badge-warning':'badge-success';
+    return `<div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div><div style="font-size:13px;font-weight:500;">${s.agency_name}</div><div style="font-size:11px;color:var(--muted);">${fmt(s.current_stock)} · Reserve: ${fmt(s.reserve_threshold)}</div></div>
+        <span class="badge ${badge}">${s.stock_status}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>`;
+  }).join('');
+
+  const { data: movements } = await sb.from('inventory_movements').select('*, agencies(name)').order('created_at',{ascending:false}).limit(6);
+  const actEl = document.getElementById('recent-activity');
+  if (!movements?.length) { actEl.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px;">No activity yet</div>'; return; }
+  actEl.innerHTML = `<table style="font-size:12px;width:100%;border-collapse:collapse;">${movements.map(m=>`<tr style="border-bottom:1px solid #F3F4F6;">
+    <td style="padding:8px 0;color:var(--muted);">${fmtDate(m.movement_date)}</td>
+    <td style="padding:8px 4px;">${m.movement_type.replace(/_/g,' ')}</td>
+    <td style="padding:8px 4px;">${m.agencies?.name||'HQ'}</td>
+    <td style="padding:8px 0;font-weight:500;color:${m.quantity>0?'var(--success)':'var(--danger)'};">${m.quantity>0?'+':''}${fmt(m.quantity)}</td>
+  </tr>`).join('')}</table>`;
+  lucide.createIcons();
+}
+
+async function loadInventory() {
+  const { data: poland } = await sb.from('poland_inventory').select('*').order('report_date',{ascending:false}).limit(1).single();
+  document.getElementById('inv-blanks').textContent = poland ? fmt(poland.blanks_available) : '0';
+  const { data: transit } = await sb.from('orders').select('quantity').eq('status','in_transit');
+  document.getElementById('inv-transit').textContent = fmt((transit||[]).reduce((s,o)=>s+o.quantity,0));
+  const { data: hqMov } = await sb.from('inventory_movements').select('quantity').is('agency_id',null);
+  document.getElementById('inv-hq').textContent = fmt(Math.max(0,(hqMov||[]).reduce((s,m)=>s+m.quantity,0)));
+
+  const { data: stocks } = await sb.from('v_current_agency_stock').select('*');
+  const tb = document.getElementById('inv-agency-table');
+  if (!stocks?.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px;">No inventory data. Import agency stock file to begin.</td></tr>'; return; }
+  tb.innerHTML = stocks.map(s => {
+    const badge = s.stock_status==='critical'?'badge-danger':s.stock_status==='warning'?'badge-warning':'badge-success';
+    const bufColor = s.buffer>=0?'var(--success)':'var(--danger)';
+    return `<tr><td style="font-weight:500;">${s.agency_name}</td><td>${fmt(s.current_stock)}</td><td>${fmt(s.reserve_threshold)}</td>
+      <td style="color:${bufColor};font-weight:500;">${s.buffer>=0?'+':''}${fmt(s.buffer)}</td>
+      <td>${s.avg_daily_usage?fmt(s.avg_daily_usage)+'/day':'—'}</td>
+      <td>${s.days_to_reserve!=null?s.days_to_reserve+' days':'—'}</td>
+      <td><span class="badge ${badge}">${s.stock_status}</span></td></tr>`;
+  }).join('');
+
+  const { data: movements } = await sb.from('inventory_movements').select('*, agencies(name)').order('movement_date',{ascending:false}).limit(20);
+  const mlTb = document.getElementById('movement-log-table');
+  if (!movements?.length) { mlTb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No movements yet</td></tr>'; return; }
+  mlTb.innerHTML = movements.map(m=>`<tr>
+    <td style="color:var(--muted);">${fmtDate(m.movement_date)}</td>
+    <td>${m.movement_type.replace(/_/g,' ')}</td>
+    <td>${m.agencies?.name||'HQ'}</td>
+    <td style="font-weight:500;color:${m.quantity>0?'var(--success)':'var(--danger)'};">${m.quantity>0?'+':''}${fmt(m.quantity)}</td>
+    <td style="color:var(--muted);font-size:12px;">${m.reference_id||'—'}</td>
+    <td style="color:var(--muted);font-size:12px;">${m.source_system||'—'}</td>
+  </tr>`).join('');
+}
+
+async function loadOrders() {
+  const { data: list } = await sb.from('orders').select('*, agencies(name)').order('order_date',{ascending:false}).limit(30);
+  const tb = document.getElementById('orders-table');
+  if (!list?.length) { tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;">No orders yet</td></tr>'; return; }
+  tb.innerHTML = list.map(o => {
+    const sb2 = {submitted:'badge-accent',confirmed:'badge-accent',in_production:'badge-warning',in_transit:'badge-accent',arrived_hq:'badge-warning',delivered:'badge-success',cancelled:'badge-gray',draft:'badge-gray'}[o.status]||'badge-gray';
+    return `<tr>
+      <td style="font-weight:500;color:var(--accent);">${o.order_ref}</td>
+      <td><span class="badge badge-gray">${o.order_type}</span></td>
+      <td>${o.agencies?.name||'—'}</td><td>${fmt(o.quantity)}</td>
+      <td style="color:var(--muted);">${fmtDate(o.order_date)}</td>
+      <td style="color:var(--muted);">${o.expected_arrival_date?fmtDate(o.expected_arrival_date):'—'}</td>
+      <td><span class="badge ${sb2}">${o.status}</span></td>
+      <td><select style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;cursor:pointer;" onchange="updateOrderStatus('${o.id}',this.value)">
+        <option value="">Update</option>
+        <option value="confirmed">Confirmed</option><option value="in_production">In Production</option>
+        <option value="in_transit">In Transit</option><option value="arrived_hq">Arrived HQ</option>
+        <option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+      </select></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadAgenciesPage() {
+  const { data: stocks } = await sb.from('v_current_agency_stock').select('*');
+  const grid = document.getElementById('agencies-grid');
+  if (!stocks?.length) { grid.innerHTML = '<div style="color:var(--muted);padding:40px;text-align:center;">No agency data yet</div>'; return; }
+  grid.innerHTML = stocks.map(s => {
+    const badge = s.stock_status==='critical'?'badge-danger':s.stock_status==='warning'?'badge-warning':'badge-success';
+    const color = s.stock_status==='critical'?'var(--danger)':s.stock_status==='warning'?'var(--warning)':'var(--success)';
+    const pct = Math.min(100, Math.round(s.current_stock / (s.reserve_threshold * 2) * 100));
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-weight:600;font-size:15px;">${s.agency_name}</div>
+        <span class="badge ${badge}">${s.stock_status}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Current Stock</div><div style="font-size:20px;font-weight:700;">${fmt(s.current_stock)}</div></div>
+        <div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Reserve</div><div style="font-size:20px;font-weight:700;">${fmt(s.reserve_threshold)}</div></div>
+        <div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Daily Usage</div><div style="font-size:20px;font-weight:700;">${s.avg_daily_usage?fmt(s.avg_daily_usage):'—'}</div></div>
+        <div style="background:var(--bg);border-radius:8px;padding:12px;"><div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Days to Reserve</div><div style="font-size:20px;font-weight:700;color:${color};">${s.days_to_reserve!=null?s.days_to_reserve:'—'}</div></div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Last updated: ${fmtDate(s.report_date)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadAlerts() {
+  const { data: alertsData } = await sb.from('v_active_alerts').select('*');
+  const el = document.getElementById('alerts-list');
+  if (!alertsData?.length) {
+    el.innerHTML = '<div style="background:var(--success-light);border:1px solid #6EE7B7;border-radius:8px;padding:16px 20px;font-size:13px;color:var(--success);display:flex;align-items:center;gap:10px;"><i data-lucide="check-circle" style="width:16px;height:16px;"></i> No active alerts — all agencies within safe stock levels</div>';
+    lucide.createIcons(); return;
+  }
+  el.innerHTML = alertsData.map(a => {
+    const cls = a.severity==='critical'?'alert-critical':a.severity==='warning'?'alert-warning':'alert-info';
+    const icon = a.severity==='critical'?'alert-circle':a.severity==='warning'?'alert-triangle':'info';
+    const color = a.severity==='critical'?'var(--danger)':a.severity==='warning'?'var(--warning)':'var(--accent)';
+    return `<div class="alert-row ${cls}">
+      <i data-lucide="${icon}" style="width:18px;height:18px;color:${color};flex-shrink:0;margin-top:1px;"></i>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:${color};">${a.severity.toUpperCase()} — ${a.title}</div>
+        <div style="font-size:12px;margin-top:3px;">${a.message||''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">${fmtDate(a.triggered_at)}</div></div>
+      <button class="btn btn-outline" style="font-size:12px;white-space:nowrap;" onclick="acknowledgeAlert('${a.id}')">Acknowledge</button>
+    </div>`;
+  }).join('');
+
+  const { data: stocks } = await sb.from('v_current_agency_stock').select('*');
+  const rfTb = document.getElementById('reorder-forecast');
+  if (!stocks?.length) { rfTb.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px;">No stock data</td></tr>'; lucide.createIcons(); return; }
+  rfTb.innerHTML = stocks.map(s => {
+    const daily = s.avg_daily_usage || 0;
+    const dtr = s.days_to_reserve;
+    const isUrgent = dtr != null && dtr < 42;
+    const suggestedQty = Math.ceil(Math.max(s.reserve_threshold, daily * 60) / 1000) * 1000;
+    const orderBy = daily > 0 && dtr != null ? new Date(Date.now() + Math.max(0, dtr - 42) * 86400000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—';
+    return `<tr>
+      <td style="font-weight:500;">${s.agency_name}</td>
+      <td style="color:${s.stock_status==='critical'?'var(--danger)':s.stock_status==='warning'?'var(--warning)':'inherit'};font-weight:500;">${fmt(s.current_stock)}</td>
+      <td>${daily?fmt(daily)+'/day':'—'}</td>
+      <td style="color:${isUrgent?'var(--danger)':'inherit'};font-weight:${isUrgent?600:400};">${dtr!=null?dtr+' days':'—'}</td>
+      <td style="color:${isUrgent?'var(--danger)':'inherit'};">${orderBy}</td>
+      <td>${fmt(suggestedQty)}</td>
+    </tr>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+async function loadImportHistory() {
+  const { data } = await sb.from('import_logs').select('*').order('created_at',{ascending:false}).limit(20);
+  const tb = document.getElementById('import-history-table');
+  if (!data?.length) { tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px;">No imports yet</td></tr>'; return; }
+  tb.innerHTML = data.map(l => {
+    const badge = l.status==='applied'?'badge-success':l.status==='rejected'?'badge-danger':'badge-warning';
+    return `<tr>
+      <td style="color:var(--muted);">${fmtDate(l.created_at)}</td>
+      <td><span class="badge badge-accent">${l.import_type.replace(/_/g,' ')}</span></td>
+      <td style="color:var(--muted);font-size:12px;">${l.file_name}</td>
+      <td style="color:var(--muted);">—</td>
+      <td><span class="badge ${badge}">${l.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadForecast() {
+  const year = new Date().getFullYear();
+  const { data: forecasts } = await sb.from('v_forecast_card_demand').select('*').eq('forecast_year',year);
+  if (!forecasts?.length) return;
+  renderPlan(forecasts, year);
+}
+
+async function loadUsers() {
+  const { data } = await sb.from('profiles').select('*, agencies(name)');
+  const tb = document.getElementById('users-table');
+  if (!data?.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No users yet</td></tr>'; return; }
+  tb.innerHTML = data.map(p => {
+    const badge = p.role==='hq_admin'?'badge-accent':p.role==='hq_manager'?'badge-success':'badge-warning';
+    return `<tr>
+      <td style="font-weight:500;">${p.id.slice(0,8)}...</td>
+      <td style="color:var(--muted);">—</td>
+      <td><span class="badge ${badge}">${ROLE_LABELS[p.role]||p.role}</span></td>
+      <td style="color:var(--muted);">${p.agencies?.name||'—'}</td>
+      <td><span class="badge badge-success">Active</span></td>
+      <td><button class="btn btn-outline" style="padding:5px 10px;font-size:12px;" onclick="editUserRole('${p.id}')"><i data-lucide="pencil" style="width:12px;height:12px;"></i> Edit</button></td>
+    </tr>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+// ACTIONS
+async function submitOrder() {
+  const type = document.getElementById('order-type').value;
+  const agencyId = document.getElementById('order-agency-select').value;
+  const qty = parseInt(document.getElementById('order-qty').value);
+  const notes = document.getElementById('order-notes').value;
+  if (!qty || qty < 1) { showToast('Please enter a valid quantity'); return; }
+  const lead = type==='blanks'?77:type==='distribution'?2:42;
+  const eta = new Date(); eta.setDate(eta.getDate()+lead);
+  const { error } = await sb.from('orders').insert({
+    order_type:type, agency_id:type==='blanks'?null:agencyId, quantity:qty,
+    order_date:new Date().toISOString().split('T')[0],
+    expected_arrival_date:eta.toISOString().split('T')[0],
+    lead_time_days:lead, notes, status:'submitted', created_by:currentUser.id
+  });
+  if (error) { showToast('Error: '+error.message); return; }
+  closeModal('order-modal');
+  showToast('Order submitted successfully');
+  loadOrders(); loadDashboard();
+}
+
+async function updateOrderStatus(orderId, newStatus) {
+  if (!newStatus) return;
+  const { error } = await sb.from('orders').update({status:newStatus}).eq('id',orderId);
+  if (error) { showToast('Error: '+error.message); return; }
+  showToast('Status updated: '+newStatus);
+  loadOrders(); loadDashboard();
+}
+
+async function submitDistribution() {
+  const agencyId = document.getElementById('dist-agency').value;
+  const qty = parseInt(document.getElementById('dist-qty').value);
+  const notes = document.getElementById('dist-notes').value;
+  if (!qty || qty < 1) { showToast('Enter a valid quantity'); return; }
+  const { error } = await sb.from('inventory_movements').insert({
+    movement_type:'hq_to_agency', agency_id:agencyId, quantity:qty,
+    movement_date:new Date().toISOString().split('T')[0],
+    source_system:'manual', notes, created_by:currentUser.id
+  });
+  if (error) { showToast('Error: '+error.message); return; }
+  closeModal('distribute-modal');
+  showToast('Distribution recorded');
+  loadAllData();
+}
+
+async function acknowledgeAlert(alertId) {
+  await sb.from('alerts').update({status:'acknowledged',acknowledged_by:currentUser.id,acknowledged_at:new Date().toISOString()}).eq('id',alertId);
+  showToast('Alert acknowledged');
+  loadAlerts(); loadDashboard();
+}
+
+async function editUserRole(profileId) {
+  const newRole = prompt('Enter role:\nhq_admin\nhq_manager\nagency_coordinator');
+  if (!newRole) return;
+  await sb.from('profiles').update({role:newRole}).eq('id',profileId);
+  showToast('Role updated');
+  loadUsers();
+}
+
+// IMPORT
+async function loadSampleAndSave(type) {
+  if (type === 'poland') {
+    const { error } = await sb.from('poland_inventory').insert({
+      report_date:new Date().toISOString().split('T')[0], batch_id:'PC-SAMPLE',
+      blanks_total:200000, blanks_available:187400, blanks_reserved:12600,
+      personalized_ready:32000, imported_by:currentUser.id, import_file_name:'sample_poland.csv'
+    });
+    if (error) { showToast('Error: '+error.message); return; }
+    await logImport('poland_stock','sample_poland.csv',1,'applied');
+    showToast('Poland stock updated'); loadInventory(); loadDashboard();
+
+  } else if (type === 'agencies') {
+    const agMap = {}; agencies.forEach(a=>agMap[a.code]=a.id);
+    const samples = [{code:'TRAVEL',stock:67200,daily:450},{code:'RELOC',stock:4100,daily:28},{code:'AUS',stock:5800,daily:65},{code:'DE',stock:1340,daily:18}];
+    for (const s of samples) {
+      if (!agMap[s.code]) continue;
+      await sb.from('agency_inventory').upsert({
+        agency_id:agMap[s.code], current_stock:s.stock,
+        report_date:new Date().toISOString().split('T')[0],
+        avg_daily_usage:s.daily, imported_by:currentUser.id, import_file_name:'sample_agencies.csv'
+      },{onConflict:'agency_id,report_date'});
+    }
+    for (const s of samples) {
+      const ag = agencies.find(a=>a.code===s.code); if (!ag) continue;
+      if (s.stock < ag.reserve_threshold) {
+        await sb.from('alerts').insert({
+          alert_type:'below_reserve', severity:'critical', status:'active', agency_id:ag.id,
+          title:`${ag.name} — below reserve threshold`,
+          message:`Current stock (${fmt(s.stock)}) is below reserve (${fmt(ag.reserve_threshold)}).`,
+          current_stock:s.stock, reserve_threshold:ag.reserve_threshold
+        });
+      }
+    }
+    await logImport('agency_stock','sample_agencies.csv',4,'applied');
+    showToast('Agency stock updated'); loadAllData();
+
+  } else if (type === 'forecast') {
+    const year = new Date().getFullYear();
+    const agMap = {}; agencies.forEach(a=>agMap[a.code]=a.id);
+    const forecasts = [
+      {code:'TRAVEL',data:[3800,3600,4200,4800,5200,5800,6200,6000,5400,4800,4200,3900]},
+      {code:'RELOC', data:[210,195,220,240,260,275,290,280,255,240,220,200]},
+      {code:'AUS',   data:[480,450,510,560,610,650,680,660,590,540,500,470]},
+      {code:'DE',    data:[140,130,155,170,185,200,210,205,180,165,150,140]},
+    ];
+    for (const f of forecasts) {
+      if (!agMap[f.code]) continue;
+      await sb.from('demand_forecasts').upsert({
+        forecast_year:year, agency_id:agMap[f.code], pickup_rate:0.35,
+        jan_customers:f.data[0],feb_customers:f.data[1],mar_customers:f.data[2],
+        apr_customers:f.data[3],may_customers:f.data[4],jun_customers:f.data[5],
+        jul_customers:f.data[6],aug_customers:f.data[7],sep_customers:f.data[8],
+        oct_customers:f.data[9],nov_customers:f.data[10],dec_customers:f.data[11],
+        imported_by:currentUser.id, import_file_name:'sample_forecast.csv', is_active:true
+      },{onConflict:'forecast_year,agency_id'});
+    }
+    await logImport('demand_forecast','sample_forecast.csv',4,'applied');
+    showToast('Forecast applied'); loadForecast();
+  }
+}
+
+async function logImport(type, fname, rows, status) {
+  await sb.from('import_logs').insert({
+    import_type:type, status, file_name:fname,
+    rows_total:rows, rows_applied:rows,
+    created_by:currentUser.id, applied_by:currentUser.id,
+    applied_at:new Date().toISOString()
+  });
+  loadImportHistory();
+}
+
+async function handleImport(e, type) {
+  showToast('File upload coming in v2 — use "Apply sample data" for now');
+}
+
+// PLANNING
+function renderPlan(forecasts, year) {
+  document.getElementById('plan-empty').style.display = 'none';
+  document.getElementById('plan-content').style.display = 'block';
+  document.getElementById('plan-title').textContent = `Annual Order Plan — ${year}`;
+  document.getElementById('plan-subtitle').textContent = `Based on ${year} forecast · 35% pickup rate · 6-week lead time`;
+  const totalCards = forecasts.reduce((s,f)=>s+(f.total_cards_annual||0),0);
+  document.getElementById('plan-kpis').innerHTML = `
+    <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Total Card Demand ${year}</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;">${fmt(totalCards)}</div></div>
+    <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Agencies</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;">${forecasts.length}</div></div>
+    <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Peak Month</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;">Jul</div></div>
+    <div class="stat-card"><div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Pickup Rate</div><div style="font-size:28px;font-weight:700;margin:8px 0 4px;">35%</div></div>`;
+  const cols = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  let html = `<thead><tr><th style="text-align:left;padding:10px 14px;background:#F8FAFC;">Agency / Row</th>${MONTHS.map(m=>`<th style="text-align:center;padding:8px;background:#F8FAFC;">${m}</th>`).join('')}</tr></thead><tbody>`;
+  const scheduleRows = [];
+  forecasts.forEach(f => {
+    const demand = cols.map(c=>f[c+'_cards']||0);
+    html += `<tr><td style="font-weight:600;padding:8px 14px;background:#F1F5F9;font-size:11px;text-transform:uppercase;color:var(--muted);" colspan="13">${f.agency_name}</td></tr>`;
+    html += `<tr><td style="padding:6px 14px 6px 20px;font-size:12px;color:var(--muted);">Card demand</td>${demand.map(v=>`<td style="text-align:center;font-size:12px;color:var(--muted);">${fmt(v)}</td>`).join('')}</tr>`;
+    html += `<tr><td style="padding:6px 14px 6px 20px;font-size:12px;font-weight:600;">Recommended order</td>`;
+    demand.forEach((v,i) => {
+      const futureNeed = (demand[i]||0)+(demand[i+1]||0)+(demand[i+2]||0);
+      if (i%3===0 && futureNeed>0) {
+        const qty = Math.ceil(futureNeed*1.3/1000)*1000;
+        scheduleRows.push({agency:f.agency_name,month:MONTHS[i],qty,arrMonth:MONTHS[Math.min(i+2,11)],urgent:i<=1});
+        html += `<td style="text-align:center;background:var(--accent-light);color:var(--accent);font-weight:600;font-size:11px;padding:6px 2px;">${fmt(qty)}</td>`;
+      } else { html += `<td style="text-align:center;color:#D1D5DB;font-size:12px;">—</td>`; }
+    });
+    html += `</tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('plan-table').innerHTML = html;
+  document.getElementById('plan-schedule').innerHTML = scheduleRows.map(r=>`<tr>
+    <td style="font-weight:500;">${r.agency}</td><td>${r.month} ${year}</td>
+    <td style="font-weight:600;color:var(--accent);">${fmt(r.qty)}</td><td>${r.arrMonth} ${year}</td>
+    <td>${r.urgent?'<span class="badge badge-danger">Urgent</span>':'<span class="badge badge-accent">Planned</span>'}</td>
+  </tr>`).join('');
+}
+
+function exportPlan() { showToast('Export CSV — coming soon'); }
+
+// UI
+const pages = ['dashboard','inventory','orders','agencies','planning','alerts','import','users'];
+const titles = {dashboard:'Dashboard',inventory:'Inventory',orders:'Orders',agencies:'Agencies',planning:'Annual Planning',alerts:'Alerts',import:'Import',users:'User Management'};
+
+function nav(page, el) {
+  pages.forEach(p => { const pg = document.querySelector(`[data-page="${p}"]`); if(pg) pg.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const pg = document.querySelector(`[data-page="${page}"]`); if(pg) pg.classList.add('active');
+  if(el) el.classList.add('active');
+  document.getElementById('page-title').textContent = titles[page]||page;
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); lucide.createIcons(); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+function toggleOrderFields() {
+  const type = document.getElementById('order-type').value;
+  document.getElementById('order-agency-row').style.display = type==='blanks'?'none':'block';
+  const lead = type==='blanks'?77:type==='distribution'?2:42;
+  document.getElementById('order-eta-label').textContent = `Expected Arrival (auto: +${lead} days)`;
+  const eta = new Date(); eta.setDate(eta.getDate()+lead);
+  document.getElementById('order-eta').value = eta.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+
+function switchImportTab(t) {
+  ['poland','agencies','forecast'].forEach(x => {
+    document.getElementById('itab-'+x).style.cssText = 'padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);';
+    document.getElementById('import-'+x).style.display = 'none';
+  });
+  document.getElementById('itab-'+t).style.cssText = 'padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent);';
+  document.getElementById('import-'+t).style.display = 'block';
+}
+
+function toggleNewUserAgency() {
+  document.getElementById('new-user-agency-row').style.display =
+    document.getElementById('new-user-role').value==='agency_coordinator'?'block':'none';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.style.display = 'flex'; lucide.createIcons();
+  setTimeout(()=>t.style.display='none',3500);
+}
+
+function fmt(n) { return Math.round(n||0).toLocaleString(); }
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+
+toggleOrderFields();
+document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+initAuth();
+</script>
+</body>
+</html>
