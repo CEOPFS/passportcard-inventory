@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    font-family: Arial, 'Helvetica Neue', sans-serif;
+    direction: rtl;
+    text-align: right;
+    background-color: #f5f7fa;
+    color: #1a202c;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-700 text-white px-4 py-2 rounded-xl font-semibold
+           hover:bg-primary-800 active:bg-primary-900 transition-colors
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-primary-700 border border-primary-700 px-4 py-2 rounded-xl font-semibold
+           hover:bg-primary-50 active:bg-primary-100 transition-colors;
+  }
+
+  .btn-accent {
+    @apply bg-accent-500 text-white px-4 py-2 rounded-xl font-semibold
+           hover:bg-accent-600 active:bg-accent-700 transition-colors
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply bg-red-500 text-white px-4 py-2 rounded-xl font-semibold
+           hover:bg-red-600 active:bg-red-700 transition-colors;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-4;
+  }
+
+  .badge-active {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700;
+  }
+
+  .badge-inactive {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           text-gray-800 placeholder-gray-400;
+  }
+
+  .page-header {
+    @apply bg-primary-700 text-white px-4 py-4 flex items-center justify-between;
+  }
+
+  .bottom-safe {
+    padding-bottom: env(safe-area-inset-bottom, 80px);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
