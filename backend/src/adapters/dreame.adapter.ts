@@ -122,11 +122,12 @@ export class DreameAdapter {
   static async getDevices(accessToken: string): Promise<DreameDevice[]> {
     const data = await dreamePost(
       '/dreame-user-iot/iotuserbind/device/listV2',
-      { sharedStatus: 1, current: 1, size: 100, lang: 'en', timestamp: Date.now() },
+      { current: 1, size: 100, lang: 'en', timestamp: Date.now() },
       accessToken
     );
 
-    const records: any[] = data?.data?.page?.records ?? [];
+    // API may return records under different paths depending on version
+    const records: any[] = data?.data?.page?.records ?? data?.data?.records ?? data?.data ?? [];
     return records.map((r: any) => ({
       did: r.did,
       model: r.model,
