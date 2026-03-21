@@ -189,8 +189,9 @@ export default function LiveView() {
         {isActive && (
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => {}}
-              className="btn-secondary py-3 flex items-center justify-center gap-2 text-sm"
+              disabled
+              title="תכונה זו תהיה זמינה בקרוב"
+              className="btn-secondary py-3 flex items-center justify-center gap-2 text-sm opacity-40 cursor-not-allowed"
             >
               <Volume2 size={18} />
               שוחח עם הילד

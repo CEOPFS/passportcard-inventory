@@ -21,7 +21,9 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    const url = error.config?.url || '';
+    const isAuthEndpoint = url.startsWith('/auth/');
+    if (isAuthEndpoint && (error.response?.status === 401 || error.response?.status === 403)) {
       localStorage.removeItem('wakebot_token');
       localStorage.removeItem('wakebot_user');
       window.location.href = '/login';
@@ -37,6 +39,10 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+  resetPassword: (email: string, token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { email, token, newPassword }),
 };
 
 // Vendors

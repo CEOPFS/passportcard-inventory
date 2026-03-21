@@ -97,8 +97,8 @@ export class WakeScenarioService {
       // Send real navigation command if Dreame device
       if (dreameSession) {
         try {
-          const roomX = child.room_x ?? 400;
-          const roomY = child.room_y ?? 300;
+          const roomX = child.wake_point_x ?? 400;
+          const roomY = child.wake_point_y ?? 300;
           await DreameAdapter.navigateTo(dreameSession.accessToken, dreameSession.did, roomX, roomY);
         } catch (err) {
           console.error('Dreame navigate error:', err);

@@ -56,7 +56,9 @@ export default function Recordings() {
   };
 
   const togglePlay = (message: WakeMessage) => {
-    const audioUrl = `/uploads/${message.file_path.split('/uploads/')[1] || message.file_path}`;
+    const audioUrl = message.file_path.startsWith('/uploads/')
+      ? message.file_path
+      : `/uploads/${message.file_path.split('/uploads/').pop() || message.file_path}`;
 
     if (playingId === message.id) {
       audioElements[message.id]?.pause();
@@ -71,7 +73,7 @@ export default function Recordings() {
 
     let audio = audioElements[message.id];
     if (!audio) {
-      audio = new Audio(message.file_path.startsWith('/') ? message.file_path : `/${message.file_path}`);
+      audio = new Audio(audioUrl);
       audio.onended = () => setPlayingId(null);
       setAudioElements(prev => ({ ...prev, [message.id]: audio }));
     }

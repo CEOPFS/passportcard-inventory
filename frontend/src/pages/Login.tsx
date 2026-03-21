@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Bot, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Bot, Mail, Lock, User, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useAppStore } from '../store';
 
@@ -15,6 +15,45 @@ export default function Login() {
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ name: '', email: '', password: '' });
+
+  // Forgot password
+  const [forgotStep, setForgotStep] = useState<'none' | 'email' | 'code'>('none');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  const handleForgotSubmitEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await authApi.forgotPassword(forgotEmail);
+      toast.success('קוד לאיפוס נשלח (בדוק את לוג המנהל)');
+      setForgotStep('code');
+    } catch {
+      toast.error('שגיאה בשליחת הבקשה');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotSubmitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error('הסיסמה חייבת להכיל לפחות 6 תווים');
+      return;
+    }
+    setLoading(true);
+    try {
+      await authApi.resetPassword(forgotEmail, resetCode, newPassword);
+      toast.success('הסיסמה עודכנה! התחבר עם הסיסמה החדשה');
+      setForgotStep('none');
+      setLoginForm(prev => ({ ...prev, email: forgotEmail }));
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'קוד שגוי או פג תוקפו');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +129,70 @@ export default function Login() {
         </div>
 
         <div className="p-6">
-          {tab === 'login' ? (
+          {/* Forgot password - step: enter email */}
+          {forgotStep === 'email' && (
+            <form onSubmit={handleForgotSubmitEmail} className="space-y-4">
+              <p className="text-sm text-gray-500 text-center">הזן את האימייל שלך ונשלח לך קוד לאיפוס סיסמה</p>
+              <div className="relative">
+                <Mail size={18} className="absolute right-3 top-3.5 text-gray-400" />
+                <input
+                  type="email"
+                  placeholder="אימייל"
+                  value={forgotEmail}
+                  onChange={e => setForgotEmail(e.target.value)}
+                  className="input-field pr-10"
+                  required
+                  dir="ltr"
+                />
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
+                {loading ? 'שולח...' : 'שלח קוד'}
+              </button>
+              <button type="button" onClick={() => setForgotStep('none')} className="btn-secondary w-full py-2.5 text-sm">
+                חזור
+              </button>
+            </form>
+          )}
+
+          {/* Forgot password - step: enter code + new password */}
+          {forgotStep === 'code' && (
+            <form onSubmit={handleForgotSubmitCode} className="space-y-4">
+              <p className="text-sm text-gray-500 text-center">הזן את הקוד שקיבלת והסיסמה החדשה</p>
+              <div className="relative">
+                <KeyRound size={18} className="absolute right-3 top-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="קוד אימות (6 תווים)"
+                  value={resetCode}
+                  onChange={e => setResetCode(e.target.value.toUpperCase())}
+                  className="input-field pr-10"
+                  required
+                  maxLength={12}
+                  dir="ltr"
+                />
+              </div>
+              <div className="relative">
+                <Lock size={18} className="absolute right-3 top-3.5 text-gray-400" />
+                <input
+                  type="password"
+                  placeholder="סיסמה חדשה (לפחות 6 תווים)"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="input-field pr-10"
+                  required
+                  dir="ltr"
+                />
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
+                {loading ? 'מעדכן...' : 'עדכן סיסמה'}
+              </button>
+              <button type="button" onClick={() => setForgotStep('email')} className="btn-secondary w-full py-2.5 text-sm">
+                שלח קוד חדש
+              </button>
+            </form>
+          )}
+
+          {tab === 'login' && forgotStep === 'none' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="relative">
                 <Mail size={18} className="absolute right-3 top-3.5 text-gray-400" />
@@ -131,6 +233,16 @@ export default function Login() {
                 {loading ? 'מתחבר...' : 'התחבר'}
               </button>
 
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => { setForgotEmail(loginForm.email); setForgotStep('email'); }}
+                  className="text-xs text-primary-600 hover:underline"
+                >
+                  שכחתי סיסמה
+                </button>
+              </div>
+
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-200" />
@@ -142,15 +254,29 @@ export default function Login() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setLoginForm({ email: 'demo@wakebot.app', password: 'demo123' });
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const res = await authApi.login({ email: 'demo@wakebot.app', password: 'demo123' });
+                    const { token, user, household } = res.data;
+                    setAuth(token, user, household);
+                    toast.success(`ברוך הבא, ${user.name}!`);
+                    navigate('/');
+                  } catch (err: any) {
+                    toast.error('חשבון הדגמה אינו זמין כרגע');
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
+                disabled={loading}
                 className="btn-secondary w-full py-2.5 text-sm"
               >
-                חשבון הדגמה
+                {loading ? 'מתחבר...' : 'חשבון הדגמה'}
               </button>
             </form>
-          ) : (
+          )}
+
+          {tab === 'register' && forgotStep === 'none' && (
             <form onSubmit={handleRegister} className="space-y-4">
               <div className="relative">
                 <User size={18} className="absolute right-3 top-3.5 text-gray-400" />

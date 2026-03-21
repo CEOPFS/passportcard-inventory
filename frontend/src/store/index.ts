@@ -62,7 +62,10 @@ export const useAppStore = create<AppState>()(
       clearAuth: () => {
         localStorage.removeItem('wakebot_token');
         localStorage.removeItem('wakebot_user');
-        set({ token: null, user: null, household: null, isAuthenticated: false });
+        set({
+          token: null, user: null, household: null, isAuthenticated: false,
+          devices: [], children: [], alerts: [], unreadAlertCount: 0, activeSessions: {},
+        });
       },
 
       // Devices

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import { queryOne, execute } from '../database/db';
 import { generateToken, authenticateToken, AuthRequest } from '../middleware/auth';
 
@@ -94,6 +95,74 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// POST /auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const user = await queryOne<any>('SELECT id, name FROM users WHERE email = $1', [email]);
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return res.json({ message: 'אם האימייל קיים במערכת, ישלח קוד לאיפוס סיסמה' });
+    }
+
+    const token = crypto.randomBytes(6).toString('hex').toUpperCase();
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await execute(
+      'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE id = $3',
+      [token, expiry.toISOString(), user.id]
+    );
+
+    // Log to console (admin can see in Render logs)
+    console.log(`[PASSWORD RESET] ${email} → token: ${token}`);
+
+    res.json({ message: 'אם האימייל קיים במערכת, ישלח קוד לאיפוס סיסמה', debug_token: process.env.NODE_ENV !== 'production' ? token : undefined });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// POST /auth/reset-password
+router.post('/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { email, token, newPassword } = req.body;
+
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ error: 'Email, token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await queryOne<any>(
+      'SELECT id FROM users WHERE email = $1 AND reset_token = $2 AND reset_token_expiry > NOW()',
+      [email, token.toUpperCase()]
+    );
+
+    if (!user) {
+      return res.status(400).json({ error: 'קוד שגוי או שפג תוקפו. בקש קוד חדש' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await execute(
+      'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expiry = NULL WHERE id = $2',
+      [passwordHash, user.id]
+    );
+
+    res.json({ message: 'הסיסמה עודכנה בהצלחה' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

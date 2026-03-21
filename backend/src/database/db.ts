@@ -32,6 +32,9 @@ export async function initializeDatabase(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     );
 
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP;
+
     CREATE TABLE IF NOT EXISTS households (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -115,6 +118,31 @@ export async function initializeDatabase(): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  // Seed demo user if not exists
+  const { v4: uuidv4 } = await import('uuid');
+  const bcrypt = await import('bcryptjs');
+  const demoEmail = 'demo@wakebot.app';
+  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [demoEmail]);
+  if (existing.rows.length === 0) {
+    const userId = uuidv4();
+    const householdId = uuidv4();
+    const deviceId = uuidv4();
+    const passwordHash = await bcrypt.hash('demo123', 12);
+    await pool.query(
+      'INSERT INTO users (id, name, email, password_hash, locale, timezone) VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, 'משתמש הדגמה', demoEmail, passwordHash, 'he', 'Asia/Jerusalem']
+    );
+    await pool.query(
+      'INSERT INTO households (id, user_id, home_name) VALUES ($1, $2, $3)',
+      [householdId, userId, 'בית הדגמה']
+    );
+    await pool.query(
+      'INSERT INTO devices (id, household_id, vendor, model, capabilities, battery_level, firmware_version, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [deviceId, householdId, 'mock', 'WakeBot Pro', JSON.stringify(['navigate', 'audio', 'camera', 'obstacle_detection']), 87, '2.1.4', 'idle']
+    );
+    console.log('Demo user seeded: demo@wakebot.app / demo123');
+  }
 
   console.log('Database initialized successfully');
 }
