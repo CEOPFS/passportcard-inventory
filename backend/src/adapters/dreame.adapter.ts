@@ -152,7 +152,7 @@ export class DreameAdapter {
       try {
         const headers = buildAuthHeaders(accessToken);
         const res = await fetch(`${BASE_URL}/dreame-user-iot/iotuserbind/device/list`, { headers });
-        const resp = await res.json();
+        const resp = await res.json() as any;
         console.log('[Dreame] GET /device/list raw:', JSON.stringify(resp));
         if (!resp?.code || resp.code === 0) data = resp;
         else console.warn('[Dreame] GET code=', resp.code, resp.msg);
