@@ -7,13 +7,17 @@
     -webkit-tap-highlight-color: transparent;
   }
   
+  html {
+    overflow-y: scroll;
+  }
+
   body {
     font-family: Arial, 'Helvetica Neue', sans-serif;
     direction: rtl;
     text-align: right;
     background-color: #f5f7fa;
     color: #1a202c;
-    overflow-x: hidden;
+    min-height: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {

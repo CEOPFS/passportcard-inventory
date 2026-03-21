@@ -87,7 +87,7 @@ function App() {
           path="/"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <Home />
                 <Navbar />
               </div>
@@ -98,7 +98,7 @@ function App() {
           path="/children"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <Children />
                 <Navbar />
               </div>
@@ -109,7 +109,7 @@ function App() {
           path="/children/:id"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <ChildProfile />
                 <Navbar />
               </div>
@@ -120,7 +120,7 @@ function App() {
           path="/children/:id/recordings"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <Recordings />
                 <Navbar />
               </div>
@@ -131,7 +131,7 @@ function App() {
           path="/children/:id/schedule"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <Schedule />
                 <Navbar />
               </div>
@@ -142,7 +142,7 @@ function App() {
           path="/map"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <MapPage />
                 <Navbar />
               </div>
@@ -153,7 +153,7 @@ function App() {
           path="/live/:sessionId"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <LiveView />
                 <Navbar />
               </div>
@@ -164,7 +164,7 @@ function App() {
           path="/history"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <History />
                 <Navbar />
               </div>
@@ -175,7 +175,7 @@ function App() {
           path="/settings"
           element={
             <PrivateRoute>
-              <div className="min-h-screen bg-gray-50 pb-20">
+              <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
                 <Settings />
                 <Navbar />
               </div>

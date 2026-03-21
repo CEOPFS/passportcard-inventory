@@ -36,10 +36,9 @@ const SUPPORTED_VENDORS = [
     id: 'dreame',
     name: 'Dreame',
     logo: '/images/dreame-logo.png',
-    models: ['X40 Ultra', 'L20 Ultra', 'X30 Ultra'],
-    capabilities: ['navigate', 'camera'],
-    authType: 'oauth2',
-    comingSoon: true,
+    models: ['X40 Ultra', 'L20 Ultra', 'X30 Ultra', 'L10 Ultra'],
+    capabilities: ['navigate', 'audio', 'camera', 'obstacle_detection'],
+    authType: 'api_key',
   },
 ];
 

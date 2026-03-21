@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User, Bell, Shield, Wifi, LogOut, ChevronLeft,
-  Bot, Info, Moon, Smartphone
+  Bot, Info, Smartphone, CheckCircle, Loader
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/Layout/Header';
@@ -21,6 +21,11 @@ export default function Settings() {
   });
 
   const [showDeviceModal, setShowDeviceModal] = useState(false);
+  const [showDreameForm, setShowDreameForm] = useState(false);
+  const [dreameModel, setDreameModel] = useState('X40 Ultra');
+  const [dreameApiKey, setDreameApiKey] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [dreameConnected, setDreameConnected] = useState(false);
 
   const handleLogout = () => {
     clearAuth();
@@ -28,29 +33,23 @@ export default function Settings() {
     navigate('/login');
   };
 
-  const settingsSections = [
-    {
-      title: 'חשבון',
-      icon: User,
-      items: [
-        {
-          label: 'שם',
-          value: user?.name,
-          type: 'display',
-        },
-        {
-          label: 'אימייל',
-          value: user?.email,
-          type: 'display',
-        },
-        {
-          label: 'שם הבית',
-          value: household?.home_name,
-          type: 'display',
-        },
-      ],
-    },
-  ];
+  const handleConnectDreame = async () => {
+    if (!dreameApiKey.trim()) {
+      toast.error('יש להזין מפתח API');
+      return;
+    }
+    setConnecting(true);
+    try {
+      await vendorApi.connect({ vendor: 'dreame', apiKey: dreameApiKey, model: dreameModel });
+      setDreameConnected(true);
+      toast.success('Dreame חובר בהצלחה!');
+      setShowDreameForm(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'שגיאה בחיבור המכשיר');
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   return (
     <div>
@@ -185,6 +184,7 @@ export default function Settings() {
             <p className="text-sm text-gray-500 mb-5">WakeBot תומך במגוון רובוטים</p>
 
             <div className="space-y-3">
+              {/* Mock / WakeBot Pro */}
               <div className="flex items-center gap-3 p-3 bg-primary-50 border border-primary-100 rounded-xl">
                 <Bot size={24} className="text-primary-700" />
                 <div>
@@ -194,7 +194,68 @@ export default function Settings() {
                 <span className="mr-auto text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">פעיל</span>
               </div>
 
-              {['iRobot Roomba', 'Roborock', 'Dreame'].map(vendor => (
+              {/* Dreame — connectable */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setShowDreameForm(v => !v)}
+                  className="w-full flex items-center gap-3 p-3 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  <Smartphone size={24} className="text-blue-500" />
+                  <div className="text-right flex-1">
+                    <p className="font-semibold text-sm text-gray-800">Dreame</p>
+                    <p className="text-xs text-gray-500">X40 Ultra, L20 Ultra, X30 Ultra ועוד</p>
+                  </div>
+                  {dreameConnected ? (
+                    <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle size={10} /> מחובר
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">חבר</span>
+                  )}
+                </button>
+
+                {showDreameForm && (
+                  <div className="p-3 bg-gray-50 border-t border-gray-100 space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">דגם</label>
+                      <select
+                        value={dreameModel}
+                        onChange={e => setDreameModel(e.target.value)}
+                        className="input-field text-sm py-2"
+                      >
+                        {['X40 Ultra', 'L20 Ultra', 'X30 Ultra', 'L10 Ultra'].map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">מפתח API של Dreame</label>
+                      <input
+                        type="text"
+                        placeholder="הזן את מפתח ה-API שלך"
+                        value={dreameApiKey}
+                        onChange={e => setDreameApiKey(e.target.value)}
+                        className="input-field text-sm py-2"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">ניתן למצוא את המפתח באפליקציית Dreame Home → הגדרות → פיתוח</p>
+                    </div>
+                    <button
+                      onClick={handleConnectDreame}
+                      disabled={connecting}
+                      className="btn-primary w-full py-2.5 text-sm flex items-center justify-center gap-2"
+                    >
+                      {connecting ? (
+                        <><Loader size={14} className="animate-spin" /> מתחבר...</>
+                      ) : (
+                        'חבר Dreame'
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Coming soon */}
+              {['iRobot Roomba', 'Roborock'].map(vendor => (
                 <div key={vendor} className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-60">
                   <Smartphone size={24} className="text-gray-400" />
                   <div>
@@ -207,7 +268,7 @@ export default function Settings() {
             </div>
 
             <button
-              onClick={() => setShowDeviceModal(false)}
+              onClick={() => { setShowDeviceModal(false); setShowDreameForm(false); }}
               className="btn-secondary w-full py-3 mt-4"
             >
               סגור
