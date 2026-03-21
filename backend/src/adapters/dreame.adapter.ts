@@ -194,26 +194,39 @@ export class DreameAdapter {
     params: object[] = []
   ): Promise<any> {
     const id = Math.floor(Math.random() * 9000) + 1000;
+    // Flat body format as required by Dreame cloud API (no data wrapper)
     const body = {
       did,
       id,
-      data: {
-        did,
-        id,
-        method: 'action',
-        params: { did, siid, aiid, in: params },
-        from: 'app',
-      },
+      method: 'action',
+      params: { did, siid, aiid, in: params },
     };
-    console.log(`[Dreame] sendCommand did=${did} siid=${siid} aiid=${aiid}`);
+    console.log(`[Dreame] sendCommand did=${did} siid=${siid} aiid=${aiid}`, JSON.stringify(body));
     const result = await dreamePost('/dreame-iot-com-10000/device/sendCommand', body, accessToken);
     console.log(`[Dreame] sendCommand response:`, JSON.stringify(result));
     return result;
   }
 
-  // Play find-robot sound (siid=7, aiid=1) — reliable beep to wake child
+  // Play find-robot sound — try multiple known siid/aiid combos across Dreame models
   static async playAudio(accessToken: string, did: string): Promise<void> {
-    await this.sendCommand(accessToken, did, 7, 1);
+    // siid=7 aiid=1 = locate on some models; siid=17 aiid=1 = voice/audio on others
+    const attempts = [
+      { siid: 7, aiid: 1 },   // L10 Ultra, X40 Ultra locate
+      { siid: 17, aiid: 1 },  // alternative audio service
+    ];
+    for (const { siid, aiid } of attempts) {
+      try {
+        const res = await this.sendCommand(accessToken, did, siid, aiid);
+        // code 0 = success
+        if (res?.code === 0 || res?.result != null) {
+          console.log(`[Dreame] playAudio succeeded siid=${siid} aiid=${aiid}`);
+          return;
+        }
+        console.warn(`[Dreame] playAudio siid=${siid} aiid=${aiid} returned code=${res?.code}`);
+      } catch (err) {
+        console.warn(`[Dreame] playAudio siid=${siid} aiid=${aiid} error:`, err);
+      }
+    }
   }
 
   // Start cleaning entire home (siid=2, aiid=1)
@@ -239,34 +252,41 @@ export class DreameAdapter {
   // Fetch real map data from Dreame cloud
   static async getMap(accessToken: string, did: string): Promise<any> {
     const attempts = [
+      // Map info endpoint
       {
         path: '/dreame-user-iot/iotuserbind/device/map/info',
         body: { did, lang: 'en', timestamp: Date.now() },
       },
+      // Map list endpoint
+      {
+        path: '/dreame-user-iot/iotuserbind/device/map/list',
+        body: { did, lang: 'en' },
+      },
+      // getProperties with correct flat format (siid=6 = map service on many Dreame models)
       {
         path: '/dreame-iot-com-10000/device/getProperties',
         body: {
           did,
+          id: Math.floor(Math.random() * 9000) + 1000,
+          method: 'get_properties',
           params: [
-            { siid: 6, piid: 1 },
-            { siid: 6, piid: 2 },
-            { siid: 6, piid: 3 },
-            { siid: 6, piid: 4 },
-            { siid: 6, piid: 8 },
+            { did, siid: 6, piid: 1 },
+            { did, siid: 6, piid: 2 },
+            { did, siid: 6, piid: 3 },
+            { did, siid: 6, piid: 4 },
+            { did, siid: 6, piid: 8 },
           ],
         },
-      },
-      {
-        path: '/dreame-user-iot/iotuserbind/device/map/list',
-        body: { did, lang: 'en' },
       },
     ];
 
     for (const { path, body } of attempts) {
       try {
         const resp = await dreamePost(path, body, accessToken) as any;
-        console.log(`[Dreame] getMap (${path}):`, JSON.stringify(resp));
+        console.log(`[Dreame] getMap (${path}):`, JSON.stringify(resp).substring(0, 500));
         if (resp?.code === 0 && resp?.data) return resp;
+        // Some endpoints return result instead of data
+        if (resp?.code === 0 && resp?.result) return { ...resp, data: resp.result };
       } catch (err) {
         console.warn(`[Dreame] getMap ${path} failed:`, err);
       }
