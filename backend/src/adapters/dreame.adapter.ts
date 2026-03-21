@@ -34,7 +34,7 @@ function md5(str: string): string {
   return crypto.createHash('md5').update(str).digest('hex');
 }
 
-async function dreamePost(path: string, body: object, accessToken?: string): Promise<any> {
+function buildAuthHeaders(accessToken?: string): Record<string, string> {
   const headers: Record<string, string> = {
     ...COMMON_HEADERS,
     'Content-Type': 'application/json',
@@ -42,10 +42,13 @@ async function dreamePost(path: string, body: object, accessToken?: string): Pro
   if (accessToken) {
     headers['dreame-auth'] = `bearer ${accessToken}`;
   }
+  return headers;
+}
 
+async function dreamePost(path: string, body: object, accessToken?: string): Promise<any> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers,
+    headers: buildAuthHeaders(accessToken),
     body: JSON.stringify(body),
   });
 
@@ -120,48 +123,65 @@ export class DreameAdapter {
   }
 
   static async getDevices(accessToken: string): Promise<DreameDevice[]> {
-    // Try listV2 first, fall back to the simpler list endpoint
-    const endpoints = [
-      '/dreame-user-iot/iotuserbind/device/listV2',
-      '/dreame-user-iot/iotuserbind/device/list',
+    // Strategy 1: POST listV2 / list
+    const postAttempts: Array<{ endpoint: string; body: object }> = [
+      { endpoint: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', timestamp: Date.now() } },
+      { endpoint: '/dreame-user-iot/iotuserbind/device/list',   body: { current: 1, size: 100, lang: 'en' } },
+      { endpoint: '/dreame-user-iot/iotuserbind/device/listV2', body: { pageNum: 1, pageSize: 100 } },
     ];
 
     let data: any = null;
-    for (const endpoint of endpoints) {
+
+    for (const { endpoint, body } of postAttempts) {
       try {
-        const resp = await dreamePost(
-          endpoint,
-          { current: 1, size: 100, lang: 'en', timestamp: Date.now() },
-          accessToken
-        );
-        console.log(`[Dreame] getDevices (${endpoint}) raw:`, JSON.stringify(resp));
-        // Accept the response if it looks valid (code 0 or no code field)
+        const resp = await dreamePost(endpoint, body, accessToken);
+        console.log(`[Dreame] POST ${endpoint} raw:`, JSON.stringify(resp));
         if (resp?.code !== undefined && resp.code !== 0) {
-          console.warn(`[Dreame] endpoint ${endpoint} returned code ${resp.code}: ${resp.msg}`);
+          console.warn(`[Dreame] ${endpoint} code=${resp.code} msg=${resp.msg}`);
           continue;
         }
         data = resp;
         break;
       } catch (err) {
-        console.warn(`[Dreame] endpoint ${endpoint} failed:`, err);
+        console.warn(`[Dreame] POST ${endpoint} failed:`, err);
       }
     }
 
-    if (!data) return [];
+    // Strategy 2: GET fallback
+    if (!data) {
+      try {
+        const headers = buildAuthHeaders(accessToken);
+        const res = await fetch(`${BASE_URL}/dreame-user-iot/iotuserbind/device/list`, { headers });
+        const resp = await res.json();
+        console.log('[Dreame] GET /device/list raw:', JSON.stringify(resp));
+        if (!resp?.code || resp.code === 0) data = resp;
+        else console.warn('[Dreame] GET code=', resp.code, resp.msg);
+      } catch (err) {
+        console.warn('[Dreame] GET device/list failed:', err);
+      }
+    }
 
-    // API may return records under different paths depending on version
+    if (!data) {
+      console.error('[Dreame] All device list attempts failed');
+      return [];
+    }
+
+    // Extract records from any known response shape
     let records: any[] = [];
-    if (Array.isArray(data?.data?.page?.records)) records = data.data.page.records;
-    else if (Array.isArray(data?.data?.records)) records = data.data.records;
-    else if (Array.isArray(data?.data)) records = data.data;
-    else if (Array.isArray(data?.result)) records = data.result;
+    if (Array.isArray(data?.data?.page?.records))  records = data.data.page.records;
+    else if (Array.isArray(data?.data?.records))    records = data.data.records;
+    else if (Array.isArray(data?.data?.list))       records = data.data.list;
+    else if (Array.isArray(data?.data))             records = data.data;
+    else if (Array.isArray(data?.result?.records))  records = data.result.records;
+    else if (Array.isArray(data?.result))           records = data.result;
+    else if (Array.isArray(data?.list))             records = data.list;
 
-    console.log('[Dreame] parsed device count:', records.length, records.map((r: any) => r.did));
+    console.log('[Dreame] device count:', records.length, records.map((r: any) => r.did || r.deviceId));
     return records.map((r: any) => ({
-      did: r.did,
-      model: r.model,
-      customName: r.customName || r.deviceInfo?.displayName || r.model,
-      displayName: r.deviceInfo?.displayName || r.customName || r.model,
+      did: r.did || r.deviceId || r.id,
+      model: r.model || r.productModel || '',
+      customName: r.customName || r.deviceInfo?.displayName || r.model || '',
+      displayName: r.deviceInfo?.displayName || r.customName || r.model || '',
       bindDomain: r.bindDomain || '',
     }));
   }
