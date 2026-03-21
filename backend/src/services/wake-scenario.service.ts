@@ -72,11 +72,21 @@ export class WakeScenarioService {
       if (device.vendor === 'dreame' && household?.vendor_account_id) {
         try {
           const creds = JSON.parse(household.vendor_account_id);
-          const session = await DreameAdapter.getSession(creds.username, creds.password);
-          const devices = await DreameAdapter.getDevices(session.accessToken);
-          const dreameDevice = devices[0]; // use first device
-          if (dreameDevice) {
-            dreameSession = { accessToken: session.accessToken, did: dreameDevice.did };
+          const authSession = await DreameAdapter.getSession(creds.username, creds.password);
+
+          // Use stored did if available, otherwise fetch device list
+          let did: string | undefined = creds.did;
+          if (!did) {
+            console.log('[Dreame] No stored did, fetching device list...');
+            const devices = await DreameAdapter.getDevices(authSession.accessToken);
+            did = devices[0]?.did;
+          }
+
+          if (did) {
+            dreameSession = { accessToken: authSession.accessToken, did };
+            console.log('[Dreame] Ready to command device:', did);
+          } else {
+            console.warn('[Dreame] No device did available — commands will be skipped');
           }
         } catch (err) {
           console.error('Dreame session error:', err);

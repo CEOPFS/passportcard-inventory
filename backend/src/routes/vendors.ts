@@ -67,14 +67,18 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
     }
 
     // Validate Dreame credentials by actually logging in
+    let dreameDid: string | null = null;
     if (vendor === 'dreame') {
       if (!username || !password) {
         return res.status(400).json({ error: 'יש לספק אימייל וסיסמה של DreameHome' });
       }
       try {
-        const session = await DreameAdapter.login(username, password);
-        const devices = await DreameAdapter.getDevices(session.accessToken);
-        if (devices.length === 0) {
+        const dreameSession = await DreameAdapter.login(username, password);
+        const devices = await DreameAdapter.getDevices(dreameSession.accessToken);
+        if (devices.length > 0) {
+          dreameDid = devices[0].did;
+          console.log('[Dreame] Found device did at connect time:', dreameDid);
+        } else {
           console.warn('[Dreame] Login succeeded but no devices found — allowing connection anyway');
         }
       } catch (err: any) {
@@ -95,7 +99,7 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
 
       // Always update stored credentials so the latest password is used
       const credentialsToStore = vendor === 'dreame'
-        ? JSON.stringify({ username, password })
+        ? JSON.stringify({ username, password, ...(dreameDid ? { did: dreameDid } : {}) })
         : (apiKey || 'mock-key');
       await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
 
@@ -111,9 +115,9 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
       [deviceId, household.id, vendor, model, JSON.stringify(vendorInfo.capabilities), 100, '2.1.4', 'idle']
     );
 
-    // Store credentials: for Dreame use JSON {username, password}, otherwise use apiKey
+    // Store credentials: for Dreame use JSON {username, password, did?}, otherwise use apiKey
     const credentialsToStore = vendor === 'dreame'
-      ? JSON.stringify({ username, password })
+      ? JSON.stringify({ username, password, ...(dreameDid ? { did: dreameDid } : {}) })
       : (apiKey || 'mock-key');
 
     await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);

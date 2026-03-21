@@ -120,14 +120,34 @@ export class DreameAdapter {
   }
 
   static async getDevices(accessToken: string): Promise<DreameDevice[]> {
-    const data = await dreamePost(
+    // Try listV2 first, fall back to the simpler list endpoint
+    const endpoints = [
       '/dreame-user-iot/iotuserbind/device/listV2',
-      { current: 1, size: 100, lang: 'en', timestamp: Date.now() },
-      accessToken
-    );
+      '/dreame-user-iot/iotuserbind/device/list',
+    ];
 
-    // Log raw response to help diagnose structure issues
-    console.log('[Dreame] getDevices raw response:', JSON.stringify(data));
+    let data: any = null;
+    for (const endpoint of endpoints) {
+      try {
+        const resp = await dreamePost(
+          endpoint,
+          { current: 1, size: 100, lang: 'en', timestamp: Date.now() },
+          accessToken
+        );
+        console.log(`[Dreame] getDevices (${endpoint}) raw:`, JSON.stringify(resp));
+        // Accept the response if it looks valid (code 0 or no code field)
+        if (resp?.code !== undefined && resp.code !== 0) {
+          console.warn(`[Dreame] endpoint ${endpoint} returned code ${resp.code}: ${resp.msg}`);
+          continue;
+        }
+        data = resp;
+        break;
+      } catch (err) {
+        console.warn(`[Dreame] endpoint ${endpoint} failed:`, err);
+      }
+    }
+
+    if (!data) return [];
 
     // API may return records under different paths depending on version
     let records: any[] = [];
@@ -136,7 +156,7 @@ export class DreameAdapter {
     else if (Array.isArray(data?.data)) records = data.data;
     else if (Array.isArray(data?.result)) records = data.result;
 
-    console.log('[Dreame] parsed device count:', records.length);
+    console.log('[Dreame] parsed device count:', records.length, records.map((r: any) => r.did));
     return records.map((r: any) => ({
       did: r.did,
       model: r.model,
