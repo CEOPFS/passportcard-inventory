@@ -21,9 +21,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const url = error.config?.url || '';
-    const isAuthEndpoint = url.startsWith('/auth/');
-    if (isAuthEndpoint && (error.response?.status === 401 || error.response?.status === 403)) {
+    const status = error.response?.status;
+    const errorMsg = error.response?.data?.error || '';
+    // Dreame vendor errors also return 401 — don't log out for those
+    const isDreameError = errorMsg.includes('Dreame') || errorMsg.includes('חיבור ל-Dreame');
+    if ((status === 401 || status === 403) && !isDreameError) {
       localStorage.removeItem('wakebot_token');
       localStorage.removeItem('wakebot_user');
       window.location.href = '/login';

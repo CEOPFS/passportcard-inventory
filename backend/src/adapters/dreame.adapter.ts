@@ -84,7 +84,15 @@ export class DreameAdapter {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Dreame login failed (${res.status}): ${text}`);
+      let msg = text;
+      try {
+        const json = JSON.parse(text);
+        msg = json.msg || json.message || json.error || text;
+      } catch {}
+      if (res.status === 401 || msg.includes('access_token_denied') || msg.includes('invalid_grant')) {
+        throw new Error('האימייל או הסיסמה שגויים. אנא בדוק את פרטי הכניסה לאפליקציית DreameHome.');
+      }
+      throw new Error(`Dreame login failed (${res.status}): ${msg}`);
     }
 
     const data = await res.json() as Record<string, unknown>;
