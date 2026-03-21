@@ -75,7 +75,7 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
         const session = await DreameAdapter.login(username, password);
         const devices = await DreameAdapter.getDevices(session.accessToken);
         if (devices.length === 0) {
-          return res.status(400).json({ error: 'לא נמצאו מכשירי Dreame בחשבון זה' });
+          console.warn('[Dreame] Login succeeded but no devices found — allowing connection anyway');
         }
       } catch (err: any) {
         return res.status(401).json({ error: `חיבור ל-Dreame נכשל: ${err.message}` });

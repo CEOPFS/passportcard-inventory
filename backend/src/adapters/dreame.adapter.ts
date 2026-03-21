@@ -126,8 +126,17 @@ export class DreameAdapter {
       accessToken
     );
 
+    // Log raw response to help diagnose structure issues
+    console.log('[Dreame] getDevices raw response:', JSON.stringify(data));
+
     // API may return records under different paths depending on version
-    const records: any[] = data?.data?.page?.records ?? data?.data?.records ?? data?.data ?? [];
+    let records: any[] = [];
+    if (Array.isArray(data?.data?.page?.records)) records = data.data.page.records;
+    else if (Array.isArray(data?.data?.records)) records = data.data.records;
+    else if (Array.isArray(data?.data)) records = data.data;
+    else if (Array.isArray(data?.result)) records = data.result;
+
+    console.log('[Dreame] parsed device count:', records.length);
     return records.map((r: any) => ({
       did: r.did,
       model: r.model,
