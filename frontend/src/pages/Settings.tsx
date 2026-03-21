@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User, Bell, Shield, Wifi, LogOut, ChevronLeft,
-  Bot, Info, Smartphone, CheckCircle, Loader
+  Bot, Info, Smartphone, CheckCircle, Loader, Eye, EyeOff
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/Layout/Header';
@@ -27,6 +27,7 @@ export default function Settings() {
   const [dreamePassword, setDreamePassword] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [dreameConnected, setDreameConnected] = useState(false);
+  const [showDreamePassword, setShowDreamePassword] = useState(false);
 
   const handleLogout = () => {
     clearAuth();
@@ -241,13 +242,23 @@ export default function Settings() {
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-600 block mb-1">סיסמה DreameHome</label>
-                      <input
-                        type="password"
-                        placeholder="הסיסמה שלך באפליקציית DreameHome"
-                        value={dreamePassword}
-                        onChange={e => setDreamePassword(e.target.value)}
-                        className="input-field text-sm py-2"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showDreamePassword ? 'text' : 'password'}
+                          placeholder="הסיסמה שלך באפליקציית DreameHome"
+                          value={dreamePassword}
+                          onChange={e => setDreamePassword(e.target.value)}
+                          className="input-field text-sm py-2 pl-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowDreamePassword(v => !v)}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          tabIndex={-1}
+                        >
+                          {showDreamePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-400 mt-1">אותם פרטי כניסה שבהם אתה משתמש באפליקציית DreameHome</p>
                     </div>
                     <button

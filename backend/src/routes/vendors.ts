@@ -93,6 +93,12 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
         [model, existingDevice.id]
       );
 
+      // Always update stored credentials so the latest password is used
+      const credentialsToStore = vendor === 'dreame'
+        ? JSON.stringify({ username, password })
+        : (apiKey || 'mock-key');
+      await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
+
       return res.json({
         message: 'Device updated successfully',
         device: { ...existingDevice, model, status: 'idle' },
