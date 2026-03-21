@@ -1,7 +1,3 @@
-databases:
-  - name: wakebot-db
-    plan: free
-
 services:
   - type: web
     name: wakebot
@@ -17,5 +13,5 @@ services:
         value: 5000
       - key: DATABASE_URL
         fromDatabase:
-          name: wakebot-db
+          name: DATABASE_URL
           property: connectionString
