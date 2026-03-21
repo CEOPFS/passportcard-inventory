@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { queryOne, execute } from '../database/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import { DreameAdapter } from '../adapters/dreame.adapter';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ const SUPPORTED_VENDORS = [
     logo: '/images/dreame-logo.png',
     models: ['X40 Ultra', 'L20 Ultra', 'X30 Ultra', 'L10 Ultra'],
     capabilities: ['navigate', 'audio', 'camera', 'obstacle_detection'],
-    authType: 'api_key',
+    authType: 'credentials',
   },
 ];
 
@@ -50,7 +51,7 @@ router.get('/supported', (req: AuthRequest, res: Response) => {
 // POST /vendors/connect
 router.post('/connect', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { vendor, apiKey, model } = req.body;
+    const { vendor, apiKey, username, password, model } = req.body;
 
     if (!vendor || !model) {
       return res.status(400).json({ error: 'Vendor and model are required' });
@@ -61,8 +62,24 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: 'Unsupported vendor' });
     }
 
-    if (vendorInfo.comingSoon) {
+    if ((vendorInfo as any).comingSoon) {
       return res.status(400).json({ error: 'This vendor integration is coming soon' });
+    }
+
+    // Validate Dreame credentials by actually logging in
+    if (vendor === 'dreame') {
+      if (!username || !password) {
+        return res.status(400).json({ error: 'יש לספק אימייל וסיסמה של DreameHome' });
+      }
+      try {
+        const session = await DreameAdapter.login(username, password);
+        const devices = await DreameAdapter.getDevices(session.accessToken);
+        if (devices.length === 0) {
+          return res.status(400).json({ error: 'לא נמצאו מכשירי Dreame בחשבון זה' });
+        }
+      } catch (err: any) {
+        return res.status(401).json({ error: `חיבור ל-Dreame נכשל: ${err.message}` });
+      }
     }
 
     const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
@@ -88,7 +105,12 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
       [deviceId, household.id, vendor, model, JSON.stringify(vendorInfo.capabilities), 100, '2.1.4', 'idle']
     );
 
-    await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [apiKey || 'mock-key', household.id]);
+    // Store credentials: for Dreame use JSON {username, password}, otherwise use apiKey
+    const credentialsToStore = vendor === 'dreame'
+      ? JSON.stringify({ username, password })
+      : (apiKey || 'mock-key');
+
+    await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
 
     const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [deviceId]);
 

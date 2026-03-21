@@ -1,5 +1,6 @@
 import { queryOne, queryAll, execute } from '../database/db';
 import { MockAdapter } from '../adapters/mock.adapter';
+import { DreameAdapter } from '../adapters/dreame.adapter';
 import { v4 as uuidv4 } from 'uuid';
 
 type WakeState = 'NAVIGATING' | 'ARRIVED' | 'PLAYING_MESSAGE' | 'OBSERVING' | 'AWAKE' | 'RETRY' | 'NOTIFY_PARENT' | 'COMPLETE';
@@ -65,6 +66,24 @@ export class WakeScenarioService {
       const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [deviceId]);
       if (!device) throw new Error('Device not found');
 
+      const household = await queryOne<any>('SELECT * FROM households WHERE id = $1', [device.household_id]);
+      let dreameSession: { accessToken: string; did: string } | null = null;
+
+      if (device.vendor === 'dreame' && household?.vendor_account_id) {
+        try {
+          const creds = JSON.parse(household.vendor_account_id);
+          const session = await DreameAdapter.getSession(creds.username, creds.password);
+          const devices = await DreameAdapter.getDevices(session.accessToken);
+          const dreameDevice = devices[0]; // use first device
+          if (dreameDevice) {
+            dreameSession = { accessToken: session.accessToken, did: dreameDevice.did };
+          }
+        } catch (err) {
+          console.error('Dreame session error:', err);
+          // fall through to mock behavior
+        }
+      }
+
       await execute("UPDATE devices SET status = 'navigating' WHERE id = $1", [deviceId]);
       await addLogEntry(sessionId, 'navigating', `הרובוט מנווט לחדרו של ${child.name}`);
 
@@ -75,9 +94,23 @@ export class WakeScenarioService {
         childName: child.name,
       });
 
+      // Send real navigation command if Dreame device
+      if (dreameSession) {
+        try {
+          const roomX = child.room_x ?? 400;
+          const roomY = child.room_y ?? 300;
+          await DreameAdapter.navigateTo(dreameSession.accessToken, dreameSession.did, roomX, roomY);
+        } catch (err) {
+          console.error('Dreame navigate error:', err);
+        }
+      }
+
       await sleep(5000);
 
       if (session.stopped) {
+        if (dreameSession) {
+          await DreameAdapter.stop(dreameSession.accessToken, dreameSession.did).catch(() => {});
+        }
         await this.finishSession(sessionId, deviceId, userId, 'stopped', 'הסשן הופסק');
         return;
       }
@@ -119,6 +152,11 @@ export class WakeScenarioService {
             childName: child.name,
             attempt: attempts,
           });
+
+          // Play audio on real Dreame device
+          if (dreameSession) {
+            await DreameAdapter.playAudio(dreameSession.accessToken, dreameSession.did).catch(() => {});
+          }
 
           await sleep(4000);
         } else {

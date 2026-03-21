@@ -23,7 +23,8 @@ export default function Settings() {
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [showDreameForm, setShowDreameForm] = useState(false);
   const [dreameModel, setDreameModel] = useState('X40 Ultra');
-  const [dreameApiKey, setDreameApiKey] = useState('');
+  const [dreameEmail, setDreameEmail] = useState('');
+  const [dreamePassword, setDreamePassword] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [dreameConnected, setDreameConnected] = useState(false);
 
@@ -34,13 +35,13 @@ export default function Settings() {
   };
 
   const handleConnectDreame = async () => {
-    if (!dreameApiKey.trim()) {
-      toast.error('יש להזין מפתח API');
+    if (!dreameEmail.trim() || !dreamePassword.trim()) {
+      toast.error('יש להזין אימייל וסיסמה של DreameHome');
       return;
     }
     setConnecting(true);
     try {
-      await vendorApi.connect({ vendor: 'dreame', apiKey: dreameApiKey, model: dreameModel });
+      await vendorApi.connect({ vendor: 'dreame', username: dreameEmail, password: dreamePassword, model: dreameModel });
       setDreameConnected(true);
       toast.success('Dreame חובר בהצלחה!');
       setShowDreameForm(false);
@@ -229,15 +230,25 @@ export default function Settings() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-600 block mb-1">מפתח API של Dreame</label>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">אימייל DreameHome</label>
                       <input
-                        type="text"
-                        placeholder="הזן את מפתח ה-API שלך"
-                        value={dreameApiKey}
-                        onChange={e => setDreameApiKey(e.target.value)}
+                        type="email"
+                        placeholder="האימייל שלך באפליקציית DreameHome"
+                        value={dreameEmail}
+                        onChange={e => setDreameEmail(e.target.value)}
                         className="input-field text-sm py-2"
                       />
-                      <p className="text-xs text-gray-400 mt-1">יש להירשם כמפתח בפורטל המפתחים של Dreame (Dreame Open Platform) ולהפיק API Key. חפש "Dreame Open Platform developer" בדפדפן.</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">סיסמה DreameHome</label>
+                      <input
+                        type="password"
+                        placeholder="הסיסמה שלך באפליקציית DreameHome"
+                        value={dreamePassword}
+                        onChange={e => setDreamePassword(e.target.value)}
+                        className="input-field text-sm py-2"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">אותם פרטי כניסה שבהם אתה משתמש באפליקציית DreameHome</p>
                     </div>
                     <button
                       onClick={handleConnectDreame}
