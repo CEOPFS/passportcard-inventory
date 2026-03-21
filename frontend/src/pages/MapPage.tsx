@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, RefreshCw } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { MapPin, RefreshCw, CheckCircle, Battery, Wifi, Cpu } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/Layout/Header';
 import HomeMap from '../components/Map/HomeMap';
@@ -9,6 +10,9 @@ import { useAppStore } from '../store';
 
 export default function MapPage() {
   const { children: storeChildren } = useAppStore();
+  const location = useLocation();
+  const justConnected = (location.state as any)?.justConnected;
+  const connectedDeviceInfo = (location.state as any)?.device;
 
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
@@ -84,6 +88,38 @@ export default function MapPage() {
       />
 
       <div className="p-4 space-y-4">
+
+        {/* Device connected banner */}
+        {justConnected && connectedDeviceInfo && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={20} className="text-green-500" />
+              <span className="font-bold text-green-800 text-sm">המכשיר חובר בהצלחה!</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white rounded-xl p-2 border border-green-100">
+                <Cpu size={16} className="text-primary-600 mx-auto mb-1" />
+                <p className="text-xs font-semibold text-gray-700 truncate">{connectedDeviceInfo.model}</p>
+                <p className="text-xs text-gray-400">דגם</p>
+              </div>
+              <div className="bg-white rounded-xl p-2 border border-green-100">
+                <Battery size={16} className="text-green-500 mx-auto mb-1" />
+                <p className="text-xs font-semibold text-gray-700">{connectedDeviceInfo.battery_level ?? 100}%</p>
+                <p className="text-xs text-gray-400">סוללה</p>
+              </div>
+              <div className="bg-white rounded-xl p-2 border border-green-100">
+                <Wifi size={16} className="text-blue-500 mx-auto mb-1" />
+                <p className="text-xs font-semibold text-gray-700">מחובר</p>
+                <p className="text-xs text-gray-400">סטטוס</p>
+              </div>
+            </div>
+            {connectedDeviceInfo.did && (
+              <p className="text-xs text-gray-400 text-center">מזהה מכשיר: {connectedDeviceInfo.did}</p>
+            )}
+            <p className="text-xs text-gray-500 text-center">לחץ על חדר במפה כדי להגדיר מיקום השכמה לכל ילד</p>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20">
             <div className="w-8 h-8 border-4 border-primary-700 border-t-transparent rounded-full animate-spin" />

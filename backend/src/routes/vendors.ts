@@ -91,21 +91,26 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
 
     const existingDevice = await queryOne<any>('SELECT * FROM devices WHERE household_id = $1 AND vendor = $2', [household.id, vendor]);
 
+    const credentialsToStore = vendor === 'dreame'
+      ? JSON.stringify({ username, password, ...(dreameDid ? { did: dreameDid } : {}) })
+      : (apiKey || 'mock-key');
+
+    await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
+
     if (existingDevice) {
       await execute(
         "UPDATE devices SET model = $1, status = 'idle', battery_level = 100 WHERE id = $2",
         [model, existingDevice.id]
       );
-
-      // Always update stored credentials so the latest password is used
-      const credentialsToStore = vendor === 'dreame'
-        ? JSON.stringify({ username, password, ...(dreameDid ? { did: dreameDid } : {}) })
-        : (apiKey || 'mock-key');
-      await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
-
+      const updated = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [existingDevice.id]);
       return res.json({
         message: 'Device updated successfully',
-        device: { ...existingDevice, model, status: 'idle' },
+        justConnected: true,
+        device: {
+          ...updated,
+          capabilities: JSON.parse(updated.capabilities || '[]'),
+          did: dreameDid || null,
+        },
       });
     }
 
@@ -115,20 +120,15 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
       [deviceId, household.id, vendor, model, JSON.stringify(vendorInfo.capabilities), 100, '2.1.4', 'idle']
     );
 
-    // Store credentials: for Dreame use JSON {username, password, did?}, otherwise use apiKey
-    const credentialsToStore = vendor === 'dreame'
-      ? JSON.stringify({ username, password, ...(dreameDid ? { did: dreameDid } : {}) })
-      : (apiKey || 'mock-key');
-
-    await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [credentialsToStore, household.id]);
-
     const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [deviceId]);
 
     res.status(201).json({
       message: 'Device connected successfully',
+      justConnected: true,
       device: {
         ...device,
         capabilities: JSON.parse(device.capabilities || '[]'),
+        did: dreameDid || null,
       },
     });
   } catch (err) {

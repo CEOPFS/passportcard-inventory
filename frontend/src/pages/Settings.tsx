@@ -42,10 +42,14 @@ export default function Settings() {
     }
     setConnecting(true);
     try {
-      await vendorApi.connect({ vendor: 'dreame', username: dreameEmail, password: dreamePassword, model: dreameModel });
+      const res = await vendorApi.connect({ vendor: 'dreame', username: dreameEmail, password: dreamePassword, model: dreameModel });
+      const connectedDevice = res.data?.device;
       setDreameConnected(true);
-      toast.success('Dreame חובר בהצלחה!');
       setShowDreameForm(false);
+      toast.success(`${connectedDevice?.model || 'Dreame'} חובר בהצלחה! מעביר למפה...`, { duration: 3000 });
+      setTimeout(() => {
+        navigate('/map', { state: { justConnected: true, device: connectedDevice } });
+      }, 1200);
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'שגיאה בחיבור המכשיר');
     } finally {
