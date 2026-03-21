@@ -17,6 +17,7 @@ import messagesRoutes from './routes/messages';
 import schedulesRoutes from './routes/schedules';
 import wakeRoutes from './routes/wake';
 import alertsRoutes from './routes/alerts';
+import dreameDiagRoutes from './routes/dreame-diag';
 import { setSocketIO } from './services/wake-scenario.service';
 import { startScheduler } from './services/scheduling.service';
 
@@ -61,6 +62,7 @@ app.use('/messages', messagesRoutes);
 app.use('/schedules', schedulesRoutes);
 app.use('/wake', wakeRoutes);
 app.use('/alerts', alertsRoutes);
+app.use('/dreame-diag', dreameDiagRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

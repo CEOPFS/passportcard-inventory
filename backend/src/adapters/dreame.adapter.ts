@@ -45,7 +45,7 @@ function buildAuthHeaders(accessToken?: string): Record<string, string> {
   return headers;
 }
 
-async function dreamePost(path: string, body: object, accessToken?: string): Promise<any> {
+export async function dreamePost(path: string, body: object, accessToken?: string): Promise<any> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: buildAuthHeaders(accessToken),
