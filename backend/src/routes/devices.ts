@@ -1,16 +1,15 @@
 import { Router, Response } from 'express';
-import { getDb } from '../database/db';
+import { queryOne, queryAll, execute } from '../database/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { MockAdapter } from '../adapters/mock.adapter';
 
 const router = Router();
 
-function getUserDevices(userId: string) {
-  const db = getDb();
-  const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(userId) as any;
+async function getUserDevices(userId: string) {
+  const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [userId]);
   if (!household) return [];
 
-  const devices = db.prepare('SELECT * FROM devices WHERE household_id = ?').all(household.id) as any[];
+  const devices = await queryAll<any>('SELECT * FROM devices WHERE household_id = $1', [household.id]);
   return devices.map(d => ({
     ...d,
     capabilities: JSON.parse(d.capabilities || '[]'),
@@ -19,9 +18,9 @@ function getUserDevices(userId: string) {
 }
 
 // GET /devices
-router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const devices = getUserDevices(req.user!.userId);
+    const devices = await getUserDevices(req.user!.userId);
     res.json({ devices });
   } catch (err) {
     console.error('Get devices error:', err);
@@ -30,13 +29,12 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // GET /devices/:id
-router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
     res.json({
@@ -53,18 +51,16 @@ router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // GET /devices/:id/map
-router.get('/:id/map', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/:id/map', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
     const mapData = JSON.parse(device.map_data || '{}');
 
-    // Return mock map if empty
     if (!mapData.rooms) {
       const mockMap = MockAdapter.generateMockMap();
       res.json({ map: mockMap });
@@ -80,15 +76,14 @@ router.get('/:id/map', authenticateToken, (req: AuthRequest, res: Response) => {
 // POST /devices/:id/navigate
 router.post('/:id/navigate', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { x, y, childId } = req.body;
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const { x, y } = req.body;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    db.prepare('UPDATE devices SET status = ? WHERE id = ?').run('navigating', req.params.id);
+    await execute('UPDATE devices SET status = $1 WHERE id = $2', ['navigating', req.params.id]);
 
     res.json({
       message: 'Navigation started',
@@ -103,16 +98,15 @@ router.post('/:id/navigate', authenticateToken, async (req: AuthRequest, res: Re
 });
 
 // POST /devices/:id/stop
-router.post('/:id/stop', authenticateToken, (req: AuthRequest, res: Response) => {
+router.post('/:id/stop', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    db.prepare('UPDATE devices SET status = ? WHERE id = ?').run('idle', req.params.id);
+    await execute('UPDATE devices SET status = $1 WHERE id = $2', ['idle', req.params.id]);
 
     res.json({ message: 'Device stopped', status: 'idle' });
   } catch (err) {
@@ -122,14 +116,13 @@ router.post('/:id/stop', authenticateToken, (req: AuthRequest, res: Response) =>
 });
 
 // POST /devices/:id/play-audio
-router.post('/:id/play-audio', authenticateToken, (req: AuthRequest, res: Response) => {
+router.post('/:id/play-audio', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { filePath, volume = 0.8 } = req.body;
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
     res.json({
@@ -145,13 +138,12 @@ router.post('/:id/play-audio', authenticateToken, (req: AuthRequest, res: Respon
 });
 
 // GET /devices/:id/status
-router.get('/:id/status', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/:id/status', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
     res.json({

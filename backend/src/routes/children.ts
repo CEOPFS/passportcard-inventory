@@ -1,28 +1,27 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../database/db';
+import { queryOne, queryAll, execute } from '../database/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-function getUserHousehold(userId: string) {
-  const db = getDb();
-  return db.prepare('SELECT * FROM households WHERE user_id = ?').get(userId) as any;
+async function getUserHousehold(userId: string) {
+  return queryOne<any>('SELECT * FROM households WHERE user_id = $1', [userId]);
 }
 
 // GET /children
-router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
-    const children = db.prepare('SELECT * FROM children WHERE household_id = ? ORDER BY created_at').all(household.id) as any[];
+    const children = await queryAll<any>('SELECT * FROM children WHERE household_id = $1 ORDER BY created_at', [household.id]);
 
-    const enriched = children.map(child => {
-      const schedules = db.prepare('SELECT * FROM schedules WHERE child_id = ? AND enabled = 1').all(child.id) as any[];
-      const messageCount = (db.prepare('SELECT COUNT(*) as count FROM wake_messages WHERE child_id = ? AND is_active = 1').get(child.id) as any).count;
-      const lastSession = db.prepare('SELECT * FROM wake_sessions WHERE child_id = ? ORDER BY created_at DESC LIMIT 1').get(child.id) as any;
+    const enriched = await Promise.all(children.map(async child => {
+      const schedules = await queryAll<any>('SELECT * FROM schedules WHERE child_id = $1 AND enabled = 1', [child.id]);
+      const countRow = await queryOne<any>('SELECT COUNT(*) as count FROM wake_messages WHERE child_id = $1 AND is_active = 1', [child.id]);
+      const messageCount = parseInt(countRow?.count ?? '0');
+      const lastSession = await queryOne<any>('SELECT * FROM wake_sessions WHERE child_id = $1 ORDER BY created_at DESC LIMIT 1', [child.id]);
 
       return {
         ...child,
@@ -33,7 +32,7 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
           log_entries: JSON.parse(lastSession.log_entries || '[]'),
         } : null,
       };
-    });
+    }));
 
     res.json({ children: enriched });
   } catch (err) {
@@ -43,24 +42,23 @@ router.get('/', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // POST /children
-router.post('/', authenticateToken, (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { name, age, room_name, wake_point_x = 50, wake_point_y = 50, safety_radius = 50 } = req.body;
 
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
     const id = uuidv4();
 
-    db.prepare(`
-      INSERT INTO children (id, household_id, name, age, room_name, wake_point_x, wake_point_y, safety_radius, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(id, household.id, name, age || null, room_name || null, wake_point_x, wake_point_y, safety_radius);
+    await execute(
+      'INSERT INTO children (id, household_id, name, age, room_name, wake_point_x, wake_point_y, safety_radius, active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)',
+      [id, household.id, name, age ?? null, room_name ?? null, wake_point_x, wake_point_y, safety_radius]
+    );
 
-    const child = db.prepare('SELECT * FROM children WHERE id = ?').get(id) as any;
+    const child = await queryOne<any>('SELECT * FROM children WHERE id = $1', [id]);
 
     res.status(201).json({ child });
   } catch (err) {
@@ -70,18 +68,19 @@ router.post('/', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // GET /children/:id
-router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
-    const child = db.prepare('SELECT * FROM children WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const child = await queryOne<any>('SELECT * FROM children WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!child) return res.status(404).json({ error: 'Child not found' });
 
-    const schedules = db.prepare('SELECT * FROM schedules WHERE child_id = ? ORDER BY day_of_week, time_of_day').all(child.id) as any[];
-    const messages = db.prepare('SELECT * FROM wake_messages WHERE child_id = ? ORDER BY order_index').all(child.id) as any[];
-    const sessions = db.prepare('SELECT * FROM wake_sessions WHERE child_id = ? ORDER BY created_at DESC LIMIT 10').all(child.id) as any[];
+    const [schedules, messages, sessions] = await Promise.all([
+      queryAll<any>('SELECT * FROM schedules WHERE child_id = $1 ORDER BY day_of_week, time_of_day', [child.id]),
+      queryAll<any>('SELECT * FROM wake_messages WHERE child_id = $1 ORDER BY order_index', [child.id]),
+      queryAll<any>('SELECT * FROM wake_sessions WHERE child_id = $1 ORDER BY created_at DESC LIMIT 10', [child.id]),
+    ]);
 
     res.json({
       child,
@@ -102,31 +101,40 @@ router.get('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /children/:id
-router.put('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
-    const child = db.prepare('SELECT * FROM children WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const child = await queryOne<any>('SELECT * FROM children WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!child) return res.status(404).json({ error: 'Child not found' });
 
     const { name, age, room_name, wake_point_x, wake_point_y, safety_radius, active, avatar_url } = req.body;
 
-    db.prepare(`
+    await execute(`
       UPDATE children SET
-        name = COALESCE(?, name),
-        age = COALESCE(?, age),
-        room_name = COALESCE(?, room_name),
-        wake_point_x = COALESCE(?, wake_point_x),
-        wake_point_y = COALESCE(?, wake_point_y),
-        safety_radius = COALESCE(?, safety_radius),
-        active = COALESCE(?, active),
-        avatar_url = COALESCE(?, avatar_url)
-      WHERE id = ?
-    `).run(name, age, room_name, wake_point_x, wake_point_y, safety_radius, active !== undefined ? (active ? 1 : 0) : null, avatar_url, req.params.id);
+        name = COALESCE($1, name),
+        age = COALESCE($2, age),
+        room_name = COALESCE($3, room_name),
+        wake_point_x = COALESCE($4, wake_point_x),
+        wake_point_y = COALESCE($5, wake_point_y),
+        safety_radius = COALESCE($6, safety_radius),
+        active = COALESCE($7, active),
+        avatar_url = COALESCE($8, avatar_url)
+      WHERE id = $9
+    `, [
+      name ?? null,
+      age ?? null,
+      room_name ?? null,
+      wake_point_x ?? null,
+      wake_point_y ?? null,
+      safety_radius ?? null,
+      active !== undefined ? (active ? 1 : 0) : null,
+      avatar_url ?? null,
+      req.params.id,
+    ]);
 
-    const updated = db.prepare('SELECT * FROM children WHERE id = ?').get(req.params.id);
+    const updated = await queryOne<any>('SELECT * FROM children WHERE id = $1', [req.params.id]);
     res.json({ child: updated });
   } catch (err) {
     console.error('Update child error:', err);
@@ -135,16 +143,15 @@ router.put('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /children/:id
-router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
-    const child = db.prepare('SELECT * FROM children WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const child = await queryOne<any>('SELECT * FROM children WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!child) return res.status(404).json({ error: 'Child not found' });
 
-    db.prepare('DELETE FROM children WHERE id = ?').run(req.params.id);
+    await execute('DELETE FROM children WHERE id = $1', [req.params.id]);
     res.json({ message: 'Child deleted successfully' });
   } catch (err) {
     console.error('Delete child error:', err);
@@ -153,27 +160,26 @@ router.delete('/:id', authenticateToken, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /children/:id/location
-router.put('/:id/location', authenticateToken, (req: AuthRequest, res: Response) => {
+router.put('/:id/location', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const household = getUserHousehold(req.user!.userId);
+    const household = await getUserHousehold(req.user!.userId);
     if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    const db = getDb();
-    const child = db.prepare('SELECT * FROM children WHERE id = ? AND household_id = ?').get(req.params.id, household.id) as any;
+    const child = await queryOne<any>('SELECT * FROM children WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!child) return res.status(404).json({ error: 'Child not found' });
 
     const { wake_point_x, wake_point_y, safety_radius, room_name } = req.body;
 
-    db.prepare(`
+    await execute(`
       UPDATE children SET
-        wake_point_x = COALESCE(?, wake_point_x),
-        wake_point_y = COALESCE(?, wake_point_y),
-        safety_radius = COALESCE(?, safety_radius),
-        room_name = COALESCE(?, room_name)
-      WHERE id = ?
-    `).run(wake_point_x, wake_point_y, safety_radius, room_name, req.params.id);
+        wake_point_x = COALESCE($1, wake_point_x),
+        wake_point_y = COALESCE($2, wake_point_y),
+        safety_radius = COALESCE($3, safety_radius),
+        room_name = COALESCE($4, room_name)
+      WHERE id = $5
+    `, [wake_point_x ?? null, wake_point_y ?? null, safety_radius ?? null, room_name ?? null, req.params.id]);
 
-    const updated = db.prepare('SELECT * FROM children WHERE id = ?').get(req.params.id);
+    const updated = await queryOne<any>('SELECT * FROM children WHERE id = $1', [req.params.id]);
     res.json({ child: updated });
   } catch (err) {
     console.error('Update location error:', err);

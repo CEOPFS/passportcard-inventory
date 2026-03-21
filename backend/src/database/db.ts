@@ -1,29 +1,26 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { Pool } from 'pg';
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../../data/wakebot.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+});
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+export async function queryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+  const result = await pool.query(sql, params);
+  return (result.rows[0] as T) ?? null;
 }
 
-let db: Database.Database;
-
-export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeDatabase(db);
-  }
-  return db;
+export async function queryAll<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  const result = await pool.query(sql, params);
+  return result.rows as T[];
 }
 
-function initializeDatabase(db: Database.Database): void {
-  db.exec(`
+export async function execute(sql: string, params: any[] = []): Promise<void> {
+  await pool.query(sql, params);
+}
+
+export async function initializeDatabase(): Promise<void> {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -32,21 +29,20 @@ function initializeDatabase(db: Database.Database): void {
       locale TEXT DEFAULT 'he',
       timezone TEXT DEFAULT 'Asia/Jerusalem',
       notification_prefs TEXT DEFAULT '{}',
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS households (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       home_name TEXT NOT NULL,
       vendor_account_id TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS devices (
       id TEXT PRIMARY KEY,
-      household_id TEXT NOT NULL,
+      household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
       vendor TEXT NOT NULL,
       model TEXT NOT NULL,
       capabilities TEXT DEFAULT '[]',
@@ -54,13 +50,12 @@ function initializeDatabase(db: Database.Database): void {
       firmware_version TEXT,
       map_data TEXT DEFAULT '{}',
       status TEXT DEFAULT 'idle',
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS children (
       id TEXT PRIMARY KEY,
-      household_id TEXT NOT NULL,
+      household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       age INTEGER,
       room_name TEXT,
@@ -69,38 +64,35 @@ function initializeDatabase(db: Database.Database): void {
       safety_radius REAL DEFAULT 50,
       active INTEGER DEFAULT 1,
       avatar_url TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS wake_messages (
       id TEXT PRIMARY KEY,
-      child_id TEXT NOT NULL,
+      child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
       file_path TEXT NOT NULL,
       duration REAL DEFAULT 0,
       order_index INTEGER DEFAULT 0,
       volume REAL DEFAULT 0.8,
       is_active INTEGER DEFAULT 1,
       label TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS schedules (
       id TEXT PRIMARY KEY,
-      child_id TEXT NOT NULL,
+      child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
       day_of_week INTEGER NOT NULL,
       time_of_day TEXT NOT NULL,
       enabled INTEGER DEFAULT 1,
       exceptions TEXT DEFAULT '[]',
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS wake_sessions (
       id TEXT PRIMARY KEY,
-      child_id TEXT NOT NULL,
-      device_id TEXT NOT NULL,
+      child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
       scheduled_at TEXT,
       started_at TEXT,
       completed_at TEXT,
@@ -109,25 +101,20 @@ function initializeDatabase(db: Database.Database): void {
       wake_confidence REAL DEFAULT 0,
       parent_notified INTEGER DEFAULT 0,
       log_entries TEXT DEFAULT '[]',
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
-      FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS alerts (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
       read INTEGER DEFAULT 0,
       child_id TEXT,
       session_id TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT NOW()
     );
   `);
 
   console.log('Database initialized successfully');
 }
-
-export default getDb;

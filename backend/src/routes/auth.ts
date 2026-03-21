@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../database/db';
+import { queryOne, execute } from '../database/db';
 import { generateToken, authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -19,8 +19,7 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const db = getDb();
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -29,30 +28,20 @@ router.post('/register', async (req: Request, res: Response) => {
     const userId = uuidv4();
     const householdId = uuidv4();
 
-    db.prepare(`
-      INSERT INTO users (id, name, email, password_hash, locale, timezone)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, name, email, passwordHash, locale, timezone);
+    await execute(
+      'INSERT INTO users (id, name, email, password_hash, locale, timezone) VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, name, email, passwordHash, locale, timezone]
+    );
 
-    db.prepare(`
-      INSERT INTO households (id, user_id, home_name)
-      VALUES (?, ?, ?)
-    `).run(householdId, userId, `הבית של ${name}`);
+    await execute(
+      'INSERT INTO households (id, user_id, home_name) VALUES ($1, $2, $3)',
+      [householdId, userId, `הבית של ${name}`]
+    );
 
-    // Create a mock device for the household
     const deviceId = uuidv4();
-    db.prepare(`
-      INSERT INTO devices (id, household_id, vendor, model, capabilities, battery_level, firmware_version, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      deviceId,
-      householdId,
-      'mock',
-      'WakeBot Pro',
-      JSON.stringify(['navigate', 'audio', 'camera', 'obstacle_detection']),
-      87,
-      '2.1.4',
-      'idle'
+    await execute(
+      'INSERT INTO devices (id, household_id, vendor, model, capabilities, battery_level, firmware_version, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [deviceId, householdId, 'mock', 'WakeBot Pro', JSON.stringify(['navigate', 'audio', 'camera', 'obstacle_detection']), 87, '2.1.4', 'idle']
     );
 
     const token = generateToken(userId, email);
@@ -77,8 +66,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+    const user = await queryOne<any>('SELECT * FROM users WHERE email = $1', [email]);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -89,7 +77,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(user.id) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [user.id]);
     const token = generateToken(user.id, user.email);
 
     res.json({
@@ -110,16 +98,18 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // GET /auth/me
-router.get('/me', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const db = getDb();
-    const user = db.prepare('SELECT id, name, email, locale, timezone, notification_prefs, created_at FROM users WHERE id = ?').get(req.user!.userId) as any;
+    const user = await queryOne<any>(
+      'SELECT id, name, email, locale, timezone, notification_prefs, created_at FROM users WHERE id = $1',
+      [req.user!.userId]
+    );
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(user.id) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [user.id]);
 
     res.json({
       user: {

@@ -8,7 +8,7 @@ import fs from 'fs';
 
 dotenv.config();
 
-import { getDb } from './database/db';
+import { initializeDatabase } from './database/db';
 import authRoutes from './routes/auth';
 import vendorRoutes from './routes/vendors';
 import deviceRoutes from './routes/devices';
@@ -19,13 +19,11 @@ import wakeRoutes from './routes/wake';
 import alertsRoutes from './routes/alerts';
 import { setSocketIO } from './services/wake-scenario.service';
 import { startScheduler } from './services/scheduling.service';
-import { authenticateToken, AuthRequest } from './middleware/auth';
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
-// Socket.IO setup
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['http://localhost:3000', 'http://localhost:5173'];
@@ -38,10 +36,8 @@ const io = new Server(server, {
   },
 });
 
-// Pass socket.io to wake scenario service
 setSocketIO(io);
 
-// Middleware
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -49,17 +45,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize database
-getDb();
-
-// Serve uploaded audio files
 const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsDir));
 
-// API Routes
 app.use('/auth', authRoutes);
 app.use('/vendors', vendorRoutes);
 app.use('/devices', deviceRoutes);
@@ -71,12 +62,10 @@ app.use('/schedules', schedulesRoutes);
 app.use('/wake', wakeRoutes);
 app.use('/alerts', alertsRoutes);
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Serve frontend static files in production
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../../frontend/dist');
   if (fs.existsSync(frontendDist)) {
@@ -87,7 +76,6 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-// Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
@@ -101,13 +89,18 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the scheduler
-startScheduler();
+async function start() {
+  await initializeDatabase();
+  startScheduler();
+  server.listen(PORT, () => {
+    console.log(`WakeBot backend running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`WakeBot backend running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+start().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
 
 export default app;

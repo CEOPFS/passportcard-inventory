@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '../database/db';
+import { queryOne, execute } from '../database/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -66,22 +66,16 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: 'This vendor integration is coming soon' });
     }
 
-    const db = getDb();
-    const household = db.prepare('SELECT * FROM households WHERE user_id = ?').get(req.user!.userId) as any;
+    const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [req.user!.userId]);
+    if (!household) return res.status(404).json({ error: 'Household not found' });
 
-    if (!household) {
-      return res.status(404).json({ error: 'Household not found' });
-    }
-
-    // Check if device already exists
-    const existingDevice = db.prepare('SELECT * FROM devices WHERE household_id = ? AND vendor = ?').get(household.id, vendor) as any;
+    const existingDevice = await queryOne<any>('SELECT * FROM devices WHERE household_id = $1 AND vendor = $2', [household.id, vendor]);
 
     if (existingDevice) {
-      // Update existing device
-      db.prepare(`
-        UPDATE devices SET model = ?, status = 'idle', battery_level = 100
-        WHERE id = ?
-      `).run(model, existingDevice.id);
+      await execute(
+        "UPDATE devices SET model = $1, status = 'idle', battery_level = 100 WHERE id = $2",
+        [model, existingDevice.id]
+      );
 
       return res.json({
         message: 'Device updated successfully',
@@ -90,24 +84,14 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
     }
 
     const deviceId = uuidv4();
-    db.prepare(`
-      INSERT INTO devices (id, household_id, vendor, model, capabilities, battery_level, firmware_version, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      deviceId,
-      household.id,
-      vendor,
-      model,
-      JSON.stringify(vendorInfo.capabilities),
-      100,
-      '2.1.4',
-      'idle'
+    await execute(
+      'INSERT INTO devices (id, household_id, vendor, model, capabilities, battery_level, firmware_version, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [deviceId, household.id, vendor, model, JSON.stringify(vendorInfo.capabilities), 100, '2.1.4', 'idle']
     );
 
-    // Update household vendor account
-    db.prepare('UPDATE households SET vendor_account_id = ? WHERE id = ?').run(apiKey || 'mock-key', household.id);
+    await execute('UPDATE households SET vendor_account_id = $1 WHERE id = $2', [apiKey || 'mock-key', household.id]);
 
-    const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(deviceId) as any;
+    const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [deviceId]);
 
     res.status(201).json({
       message: 'Device connected successfully',
