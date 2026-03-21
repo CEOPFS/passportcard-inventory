@@ -237,7 +237,7 @@ export default function Settings() {
                         onChange={e => setDreameApiKey(e.target.value)}
                         className="input-field text-sm py-2"
                       />
-                      <p className="text-xs text-gray-400 mt-1">ניתן למצוא את המפתח באפליקציית Dreame Home → הגדרות → פיתוח</p>
+                      <p className="text-xs text-gray-400 mt-1">יש להירשם כמפתח בפורטל המפתחים של Dreame (Dreame Open Platform) ולהפיק API Key. חפש "Dreame Open Platform developer" בדפדפן.</p>
                     </div>
                     <button
                       onClick={handleConnectDreame}
