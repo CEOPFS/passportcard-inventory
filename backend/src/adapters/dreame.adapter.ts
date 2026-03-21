@@ -87,16 +87,16 @@ export class DreameAdapter {
       throw new Error(`Dreame login failed (${res.status}): ${text}`);
     }
 
-    const data = await res.json();
+    const data = await res.json() as Record<string, unknown>;
     if (!data.access_token) {
       throw new Error('Dreame login failed: no access token returned');
     }
 
     const session: DreameSession = {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      uid: data.uid || data.userId || '',
-      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+      accessToken: data.access_token as string,
+      refreshToken: data.refresh_token as string | undefined,
+      uid: (data.uid || data.userId || '') as string,
+      expiresAt: Date.now() + ((data.expires_in as number) || 3600) * 1000,
     };
 
     sessionCache.set(username, session);

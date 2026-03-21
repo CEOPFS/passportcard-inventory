@@ -42,7 +42,7 @@ export const authApi = {
 // Vendors
 export const vendorApi = {
   getSupported: () => api.get('/vendors/supported'),
-  connect: (data: { vendor: string; apiKey?: string; model: string }) =>
+  connect: (data: { vendor: string; apiKey?: string; model: string; username?: string; password?: string }) =>
     api.post('/vendors/connect', data),
 };
 
