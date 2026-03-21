@@ -12,6 +12,4 @@ services:
       - key: PORT
         value: 5000
       - key: DATABASE_URL
-        fromDatabase:
-          name: DATABASE_URL
-          property: connectionString
+        sync: false
