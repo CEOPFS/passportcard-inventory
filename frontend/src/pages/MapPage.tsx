@@ -163,7 +163,22 @@ export default function MapPage() {
               </div>
             )}
 
-            {/* Map */}
+            {/* Real map image from Dreame robot */}
+            {mapData.mapImageUrl && (
+              <div className="rounded-2xl overflow-hidden border border-blue-200 bg-blue-50">
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-100 border-b border-blue-200">
+                  <Wifi size={14} className="text-blue-600" />
+                  <span className="text-xs font-semibold text-blue-700">מפה חיה ממכשיר Dreame</span>
+                </div>
+                <img
+                  src={mapData.mapImageUrl}
+                  alt="מפת הבית"
+                  className="w-full object-contain max-h-64"
+                />
+              </div>
+            )}
+
+            {/* Interactive SVG map for setting wake points */}
             <HomeMap
               mapData={mapData}
               children={children}

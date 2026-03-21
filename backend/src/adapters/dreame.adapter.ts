@@ -230,4 +230,47 @@ export class DreameAdapter {
   static async returnToDock(accessToken: string, did: string): Promise<void> {
     await this.sendCommand(accessToken, did, 3, 1);
   }
+
+  // Beep to confirm connection
+  static async playConnectedBeep(accessToken: string, did: string): Promise<void> {
+    await this.playAudio(accessToken, did);
+  }
+
+  // Fetch real map data from Dreame cloud
+  static async getMap(accessToken: string, did: string): Promise<any> {
+    const attempts = [
+      {
+        path: '/dreame-user-iot/iotuserbind/device/map/info',
+        body: { did, lang: 'en', timestamp: Date.now() },
+      },
+      {
+        path: '/dreame-iot-com-10000/device/getProperties',
+        body: {
+          did,
+          params: [
+            { siid: 6, piid: 1 },
+            { siid: 6, piid: 2 },
+            { siid: 6, piid: 3 },
+            { siid: 6, piid: 4 },
+            { siid: 6, piid: 8 },
+          ],
+        },
+      },
+      {
+        path: '/dreame-user-iot/iotuserbind/device/map/list',
+        body: { did, lang: 'en' },
+      },
+    ];
+
+    for (const { path, body } of attempts) {
+      try {
+        const resp = await dreamePost(path, body, accessToken) as any;
+        console.log(`[Dreame] getMap (${path}):`, JSON.stringify(resp));
+        if (resp?.code === 0 && resp?.data) return resp;
+      } catch (err) {
+        console.warn(`[Dreame] getMap ${path} failed:`, err);
+      }
+    }
+    return null;
+  }
 }

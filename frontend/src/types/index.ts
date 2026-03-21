@@ -47,6 +47,7 @@ export interface MapData {
   robotPosition: { x: number; y: number };
   forbiddenZones: Array<{ x: number; y: number; width: number; height: number }>;
   chargingStation: { x: number; y: number };
+  mapImageUrl?: string;
 }
 
 export interface Child {

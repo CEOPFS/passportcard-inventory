@@ -103,6 +103,20 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
         [model, existingDevice.id]
       );
       const updated = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [existingDevice.id]);
+
+      // Fire-and-forget: beep the robot to confirm connection
+      if (dreameDid) {
+        (async () => {
+          try {
+            const beepSession = await DreameAdapter.getSession(username, password);
+            await DreameAdapter.playConnectedBeep(beepSession.accessToken, dreameDid);
+            console.log('[Dreame] Connected beep sent');
+          } catch (err) {
+            console.error('[Dreame] Connected beep failed:', err);
+          }
+        })();
+      }
+
       return res.json({
         message: 'Device updated successfully',
         justConnected: true,
@@ -121,6 +135,19 @@ router.post('/connect', authenticateToken, async (req: AuthRequest, res: Respons
     );
 
     const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1', [deviceId]);
+
+    // Fire-and-forget: beep the robot to confirm connection
+    if (dreameDid) {
+      (async () => {
+        try {
+          const beepSession = await DreameAdapter.getSession(username, password);
+          await DreameAdapter.playConnectedBeep(beepSession.accessToken, dreameDid);
+          console.log('[Dreame] Connected beep sent');
+        } catch (err) {
+          console.error('[Dreame] Connected beep failed:', err);
+        }
+      })();
+    }
 
     res.status(201).json({
       message: 'Device connected successfully',

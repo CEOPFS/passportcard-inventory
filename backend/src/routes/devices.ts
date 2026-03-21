@@ -2,8 +2,61 @@ import { Router, Response } from 'express';
 import { queryOne, queryAll, execute } from '../database/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { MockAdapter } from '../adapters/mock.adapter';
+import { DreameAdapter } from '../adapters/dreame.adapter';
 
 const router = Router();
+
+const ROOM_COLORS = ['#B3D9FF','#FFD6B3','#B3FFD9','#FFB3D9','#D9B3FF','#FFFAB3','#B3FFF0'];
+const ROOM_NAMES_HE: Record<string, string> = {
+  bedroom: 'חדר שינה', living: 'סלון', kitchen: 'מטבח',
+  bathroom: 'חדר אמבטיה', hallway: 'מסדרון', room: 'חדר', office: 'חדר עבודה',
+};
+
+function parseDreameMap(raw: any): any | null {
+  try {
+    const d = raw?.data;
+    if (!d) return null;
+
+    // Shape 1: data.mapInfo with rooms array
+    const roomsRaw: any[] = d.mapInfo?.rooms || d.rooms || d.roomInfo || d.segmentList || [];
+    // Shape 2: data.mapUrl — real rendered map image from Dreame cloud
+    const mapImageUrl: string | undefined = d.mapUrl || d.map_url || d.imageUrl || undefined;
+
+    if (roomsRaw.length === 0 && !mapImageUrl) return null;
+
+    const W = 800, H = 600;
+    const rooms = roomsRaw.map((r: any, i: number) => {
+      const nameLower = (r.name || r.roomName || r.customName || 'room').toLowerCase();
+      const heKey = Object.keys(ROOM_NAMES_HE).find(k => nameLower.includes(k)) || 'room';
+      const nameHe = ROOM_NAMES_HE[heKey] + (roomsRaw.length > 1 ? ` ${i + 1}` : '');
+      // Use coordinates if available, otherwise lay them out in a grid
+      const col = i % 3, row = Math.floor(i / 3);
+      return {
+        id: String(r.id || r.roomId || i),
+        name: r.name || r.roomName || `Room ${i + 1}`,
+        nameHe,
+        x: r.x ?? (col * 250 + 50),
+        y: r.y ?? (row * 200 + 50),
+        width: r.width ?? 200,
+        height: r.height ?? 150,
+        color: ROOM_COLORS[i % ROOM_COLORS.length],
+      };
+    });
+
+    return {
+      width: d.width || W,
+      height: d.height || H,
+      rooms,
+      robotPosition: d.robotPosition || { x: W / 2, y: H / 2 },
+      forbiddenZones: d.forbiddenZones || [],
+      chargingStation: d.chargingStation || d.chargeStation || { x: 50, y: 50 },
+      ...(mapImageUrl ? { mapImageUrl } : {}),
+    };
+  } catch (err) {
+    console.error('[Dreame] parseDreameMap error:', err);
+    return null;
+  }
+}
 
 async function getUserDevices(userId: string) {
   const household = await queryOne<any>('SELECT * FROM households WHERE user_id = $1', [userId]);
@@ -59,14 +112,33 @@ router.get('/:id/map', authenticateToken, async (req: AuthRequest, res: Response
     const device = await queryOne<any>('SELECT * FROM devices WHERE id = $1 AND household_id = $2', [req.params.id, household.id]);
     if (!device) return res.status(404).json({ error: 'Device not found' });
 
-    const mapData = JSON.parse(device.map_data || '{}');
-
-    if (!mapData.rooms) {
-      const mockMap = MockAdapter.generateMockMap();
-      res.json({ map: mockMap });
-    } else {
-      res.json({ map: mapData });
+    // Try to fetch real map from Dreame
+    if (device.vendor === 'dreame' && household.vendor_account_id) {
+      try {
+        const creds = JSON.parse(household.vendor_account_id);
+        if (creds.username && creds.password && creds.did) {
+          const session = await DreameAdapter.getSession(creds.username, creds.password);
+          const mapResult = await DreameAdapter.getMap(session.accessToken, creds.did);
+          if (mapResult) {
+            const parsedMap = parseDreameMap(mapResult);
+            if (parsedMap) {
+              await execute('UPDATE devices SET map_data = $1 WHERE id = $2', [JSON.stringify(parsedMap), device.id]);
+              return res.json({ map: parsedMap, source: 'dreame' });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Dreame] getMap error:', err);
+      }
     }
+
+    const mapData = JSON.parse(device.map_data || '{}');
+    if (mapData.rooms) {
+      return res.json({ map: mapData, source: 'cached' });
+    }
+
+    const mockMap = MockAdapter.generateMockMap();
+    res.json({ map: mockMap, source: 'mock' });
   } catch (err) {
     console.error('Get map error:', err);
     res.status(500).json({ error: 'Failed to fetch map' });
