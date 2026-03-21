@@ -194,41 +194,36 @@ export class DreameAdapter {
     params: object[] = []
   ): Promise<any> {
     const id = Math.floor(Math.random() * 9000) + 1000;
-    return dreamePost(
-      '/dreame-iot-com-10000/device/sendCommand',
-      {
+    const body = {
+      did,
+      id,
+      data: {
         did,
         id,
-        data: {
-          did,
-          id,
-          method: 'action',
-          params: { did, siid, aiid, in: params },
-          from: 'XXXXXX',
-        },
+        method: 'action',
+        params: { did, siid, aiid, in: params },
+        from: 'app',
       },
-      accessToken
-    );
+    };
+    console.log(`[Dreame] sendCommand did=${did} siid=${siid} aiid=${aiid}`);
+    const result = await dreamePost('/dreame-iot-com-10000/device/sendCommand', body, accessToken);
+    console.log(`[Dreame] sendCommand response:`, JSON.stringify(result));
+    return result;
   }
 
-  // Navigate to coordinates (uses map update action siid=6, aiid=2)
-  static async navigateTo(accessToken: string, did: string, x: number, y: number): Promise<void> {
-    await this.sendCommand(accessToken, did, 6, 2, [{ piid: 1, value: JSON.stringify({ x, y }) }]);
-  }
-
-  // Play locator beep / audio (siid=7, aiid=2)
+  // Play find-robot sound (siid=7, aiid=1) — reliable beep to wake child
   static async playAudio(accessToken: string, did: string): Promise<void> {
-    await this.sendCommand(accessToken, did, 7, 2);
-  }
-
-  // Locate (short beep, siid=7, aiid=1)
-  static async locate(accessToken: string, did: string): Promise<void> {
     await this.sendCommand(accessToken, did, 7, 1);
   }
 
-  // Stop (siid=4, aiid=2)
+  // Start cleaning entire home (siid=2, aiid=1)
+  static async startCleaning(accessToken: string, did: string): Promise<void> {
+    await this.sendCommand(accessToken, did, 2, 1);
+  }
+
+  // Stop (siid=2, aiid=2)
   static async stop(accessToken: string, did: string): Promise<void> {
-    await this.sendCommand(accessToken, did, 4, 2);
+    await this.sendCommand(accessToken, did, 2, 2);
   }
 
   // Return to dock (siid=3, aiid=1)

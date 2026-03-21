@@ -104,14 +104,13 @@ export class WakeScenarioService {
         childName: child.name,
       });
 
-      // Send real navigation command if Dreame device
+      // Start cleaning to get robot moving toward child's room
       if (dreameSession) {
         try {
-          const roomX = child.wake_point_x ?? 400;
-          const roomY = child.wake_point_y ?? 300;
-          await DreameAdapter.navigateTo(dreameSession.accessToken, dreameSession.did, roomX, roomY);
+          await DreameAdapter.startCleaning(dreameSession.accessToken, dreameSession.did);
+          console.log('[Dreame] startCleaning sent');
         } catch (err) {
-          console.error('Dreame navigate error:', err);
+          console.error('[Dreame] startCleaning error:', err);
         }
       }
 
@@ -165,7 +164,12 @@ export class WakeScenarioService {
 
           // Play audio on real Dreame device
           if (dreameSession) {
-            await DreameAdapter.playAudio(dreameSession.accessToken, dreameSession.did).catch(() => {});
+            try {
+              await DreameAdapter.playAudio(dreameSession.accessToken, dreameSession.did);
+              console.log('[Dreame] playAudio sent');
+            } catch (err) {
+              console.error('[Dreame] playAudio error:', err);
+            }
           }
 
           await sleep(4000);
