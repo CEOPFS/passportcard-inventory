@@ -73,9 +73,18 @@ router.post('/', async (req: Request, res: Response) => {
   if (!token) return res.json(report);
 
   // ── Step 2: List devices (all known endpoints) ────────────────────────────
+  let uid = '';
+  try { uid = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())?.uid ?? ''; } catch {}
+
   const deviceAttempts = [
     { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', timestamp: Date.now() } },
     { path: '/dreame-user-iot/iotuserbind/device/list',   body: { current: 1, size: 100, lang: 'en' } },
+    { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', uid, timestamp: Date.now() } },
+    { path: '/dreame-user-iot/iotuserbind/userDevice/list', body: { current: 1, size: 100, lang: 'en' } },
+    { path: '/dreame-user-iot/iotuserbind/v2/device/list',  body: { current: 1, size: 100, lang: 'en' } },
+    { path: '/dreame-user-iot/family/device/list',          body: { lang: 'en' } },
+    { path: '/dreame-user-iot/iotuserbind/device/share/acceptList', body: { current: 1, size: 100 } },
+    { path: '/dreame-user-iot/home/device/list',            body: { lang: 'en' } },
   ];
   let did: string | null = null;
   for (const a of deviceAttempts) {
