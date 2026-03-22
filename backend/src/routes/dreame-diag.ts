@@ -24,6 +24,15 @@ function md5(str: string): string {
   return crypto.createHash('md5').update(str).digest('hex');
 }
 
+async function get(path: string, token: string): Promise<{ status: number; body: any }> {
+  const headers: Record<string, string> = { ...COMMON_HEADERS, 'dreame-auth': `bearer ${token}` };
+  const res = await fetch(`${BASE_URL}${path}`, { method: 'GET', headers });
+  const text = await res.text();
+  let parsed: any;
+  try { parsed = JSON.parse(text); } catch { parsed = text; }
+  return { status: res.status, body: parsed };
+}
+
 async function post(path: string, body: object, token?: string, authStyle: 'dreame-header' | 'bearer-replace' | 'both' = 'dreame-header'): Promise<{ status: number; body: any }> {
   const headers: Record<string, string> = { ...COMMON_HEADERS, 'Content-Type': 'application/json' };
   if (token) {
@@ -138,6 +147,28 @@ router.post('/', async (req: Request, res: Response) => {
           report.allDevices = devs.map((d: any) => ({ did: d.did || d.deviceId, model: d.model }));
           break;
         }
+      }
+    }
+  }
+
+  // ── Step 2c: Try GET endpoints ────────────────────────────────────────────
+  if (!did) {
+    const getAttempts = [
+      '/dreame-user-iot/iotuserbind/device/listV2?current=1&size=100&lang=en',
+      '/dreame-user-iot/iotuserbind/device/list?current=1&size=100&lang=en',
+      '/dreame-user-iot/home/info/list?lang=en',
+    ];
+    for (const path of getAttempts) {
+      const r = await get(path, token).catch(e => ({ status: 0, body: e.message }));
+      step(`2c_GET_${path.split('/').pop()!.split('?')[0]}`, r);
+      const records: any[] =
+        r.body?.data?.page?.records ?? r.body?.data?.records ??
+        r.body?.data?.list ?? r.body?.data ?? [];
+      if (Array.isArray(records) && records.length > 0) {
+        did = records[0]?.did ?? records[0]?.deviceId ?? null;
+        report.foundDid = did;
+        report.allDevices = records.map((d: any) => ({ did: d.did || d.deviceId, model: d.model }));
+        break;
       }
     }
   }
