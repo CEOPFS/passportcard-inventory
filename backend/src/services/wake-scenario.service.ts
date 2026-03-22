@@ -1,6 +1,7 @@
 import { queryOne, queryAll, execute } from '../database/db';
 import { MockAdapter } from '../adapters/mock.adapter';
 import { DreameAdapter } from '../adapters/dreame.adapter';
+import { detectWakeFromFrame } from './claude-vision.service';
 import { v4 as uuidv4 } from 'uuid';
 
 type WakeState = 'NAVIGATING' | 'ARRIVED' | 'PLAYING_MESSAGE' | 'OBSERVING' | 'AWAKE' | 'RETRY' | 'NOTIFY_PARENT' | 'COMPLETE';
@@ -199,10 +200,22 @@ export class WakeScenarioService {
 
         await sleep(3000);
 
-        const wakeDetection = MockAdapter.simulateWakeDetection();
-        const wakeChance = 0.3 + (attempts * 0.25);
+        let wakeDetection: { confidence: number; status: 'sleeping' | 'stirring' | 'awake' };
+        if (process.env.ANTHROPIC_API_KEY) {
+          try {
+            const frame = MockAdapter.generateCameraFrame();
+            // Strip the data URL prefix to get raw base64, then detect via Claude Vision
+            const base64Data = frame.replace(/^data:image\/\w+;base64,/, '');
+            wakeDetection = await detectWakeFromFrame(base64Data, 'image/png');
+          } catch (err) {
+            console.error('[Vision] Claude wake detection failed, falling back to mock:', err);
+            wakeDetection = MockAdapter.simulateWakeDetection();
+          }
+        } else {
+          wakeDetection = MockAdapter.simulateWakeDetection();
+        }
 
-        if (wakeDetection.confidence > (1 - wakeChance)) {
+        if (wakeDetection.status === 'awake' || wakeDetection.confidence > 0.7) {
           childAwake = true;
           session.state = 'AWAKE';
 
