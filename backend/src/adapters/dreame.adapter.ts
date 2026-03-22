@@ -194,12 +194,12 @@ export class DreameAdapter {
     params: object[] = []
   ): Promise<any> {
     const id = Math.floor(Math.random() * 9000) + 1000;
-    // Flat body format as required by Dreame cloud API (no data wrapper)
+    // Dreame cloud API requires params as an array (standard MiIO protocol)
     const body = {
       did,
       id,
       method: 'action',
-      params: { did, siid, aiid, in: params },
+      params: [{ did, siid, aiid, in: params }],
     };
     console.log(`[Dreame] sendCommand did=${did} siid=${siid} aiid=${aiid}`, JSON.stringify(body));
     const result = await dreamePost('/dreame-iot-com-10000/device/sendCommand', body, accessToken);

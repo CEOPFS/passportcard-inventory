@@ -186,7 +186,7 @@ router.post('/', async (req: Request, res: Response) => {
   ];
   for (const { siid, aiid } of beepCombos) {
     const id = Math.floor(Math.random() * 9000) + 1000;
-    const body = { did, id, method: 'action', params: { did, siid, aiid, in: [] } };
+    const body = { did, id, method: 'action', params: [{ did, siid, aiid, in: [] }] };
     const r = await post('/dreame-iot-com-10000/device/sendCommand', body, token)
       .catch(e => ({ status: 0, body: e.message }));
     step(`3_beep_siid${siid}_aiid${aiid}`, r);

@@ -116,14 +116,21 @@ router.get('/:id/map', authenticateToken, async (req: AuthRequest, res: Response
     if (device.vendor === 'dreame' && household.vendor_account_id) {
       try {
         const creds = JSON.parse(household.vendor_account_id);
-        if (creds.username && creds.password && creds.did) {
+        if (creds.username && creds.password) {
           const session = await DreameAdapter.getSession(creds.username, creds.password);
-          const mapResult = await DreameAdapter.getMap(session.accessToken, creds.did);
-          if (mapResult) {
-            const parsedMap = parseDreameMap(mapResult);
-            if (parsedMap) {
-              await execute('UPDATE devices SET map_data = $1 WHERE id = $2', [JSON.stringify(parsedMap), device.id]);
-              return res.json({ map: parsedMap, source: 'dreame' });
+          let did: string | undefined = creds.did;
+          if (!did) {
+            const devices = await DreameAdapter.getDevices(session.accessToken);
+            did = devices[0]?.did;
+          }
+          if (did) {
+            const mapResult = await DreameAdapter.getMap(session.accessToken, did);
+            if (mapResult) {
+              const parsedMap = parseDreameMap(mapResult);
+              if (parsedMap) {
+                await execute('UPDATE devices SET map_data = $1 WHERE id = $2', [JSON.stringify(parsedMap), device.id]);
+                return res.json({ map: parsedMap, source: 'dreame' });
+              }
             }
           }
         }
