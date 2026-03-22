@@ -102,6 +102,34 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
+  // ── Step 2b: Try home-based device lookup ─────────────────────────────────
+  if (!did) {
+    // First get home list, then get devices per home
+    const homeR = await post('/dreame-user-iot/home/info/list', { lang: 'en' }, token)
+      .catch(e => ({ status: 0, body: e.message }));
+    step('2b_home_list', homeR);
+
+    const homes: any[] =
+      homeR.body?.data?.list ?? homeR.body?.data ?? homeR.body?.data?.records ?? [];
+    if (Array.isArray(homes)) {
+      for (const home of homes.slice(0, 3)) {
+        const homeId = home.homeId ?? home.id ?? home.familyId;
+        if (!homeId) continue;
+        const hdR = await post('/dreame-user-iot/home/device/list', { homeId, lang: 'en' }, token)
+          .catch(e => ({ status: 0, body: e.message }));
+        step(`2b_home_${homeId}_devices`, hdR);
+        const devs: any[] =
+          hdR.body?.data?.list ?? hdR.body?.data?.records ?? hdR.body?.data ?? [];
+        if (Array.isArray(devs) && devs.length > 0) {
+          did = devs[0]?.did ?? devs[0]?.deviceId ?? null;
+          report.foundDid = did;
+          report.allDevices = devs.map((d: any) => ({ did: d.did || d.deviceId, model: d.model }));
+          break;
+        }
+      }
+    }
+  }
+
   if (!did) {
     report.note = 'No device DID found — cannot test commands';
     return res.json(report);
