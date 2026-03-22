@@ -24,9 +24,19 @@ function md5(str: string): string {
   return crypto.createHash('md5').update(str).digest('hex');
 }
 
-async function post(path: string, body: object, token?: string): Promise<{ status: number; body: any }> {
+async function post(path: string, body: object, token?: string, authStyle: 'dreame-header' | 'bearer-replace' | 'both' = 'dreame-header'): Promise<{ status: number; body: any }> {
   const headers: Record<string, string> = { ...COMMON_HEADERS, 'Content-Type': 'application/json' };
-  if (token) headers['dreame-auth'] = `bearer ${token}`;
+  if (token) {
+    if (authStyle === 'dreame-header') {
+      headers['dreame-auth'] = `bearer ${token}`;
+    } else if (authStyle === 'bearer-replace') {
+      headers['Authorization'] = `Bearer ${token}`;
+      delete headers['dreame-auth'];
+    } else {
+      headers['dreame-auth'] = `bearer ${token}`;
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
   const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const text = await res.text();
   let parsed: any;
@@ -76,20 +86,22 @@ router.post('/', async (req: Request, res: Response) => {
   let uid = '';
   try { uid = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())?.uid ?? ''; } catch {}
 
-  const deviceAttempts = [
+  type AuthStyle = 'dreame-header' | 'bearer-replace' | 'both';
+  const deviceAttempts: { path: string; body: object; auth?: AuthStyle; label?: string }[] = [
+    // Standard dreame-auth header
     { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', timestamp: Date.now() } },
     { path: '/dreame-user-iot/iotuserbind/device/list',   body: { current: 1, size: 100, lang: 'en' } },
-    { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', uid, timestamp: Date.now() } },
-    { path: '/dreame-user-iot/iotuserbind/userDevice/list', body: { current: 1, size: 100, lang: 'en' } },
-    { path: '/dreame-user-iot/iotuserbind/v2/device/list',  body: { current: 1, size: 100, lang: 'en' } },
-    { path: '/dreame-user-iot/family/device/list',          body: { lang: 'en' } },
-    { path: '/dreame-user-iot/iotuserbind/device/share/acceptList', body: { current: 1, size: 100 } },
-    { path: '/dreame-user-iot/home/device/list',            body: { lang: 'en' } },
+    // Bearer replaces Basic auth
+    { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', timestamp: Date.now() }, auth: 'bearer-replace', label: 'listV2_bearerReplace' },
+    { path: '/dreame-user-iot/iotuserbind/device/list',   body: { current: 1, size: 100, lang: 'en' }, auth: 'bearer-replace', label: 'list_bearerReplace' },
+    // Both headers
+    { path: '/dreame-user-iot/iotuserbind/device/listV2', body: { current: 1, size: 100, lang: 'en', timestamp: Date.now() }, auth: 'both', label: 'listV2_both' },
   ];
   let did: string | null = null;
   for (const a of deviceAttempts) {
-    const r = await post(a.path, a.body, token).catch(e => ({ status: 0, body: e.message }));
-    step(`2_devices_${a.path.split('/').pop()}`, r);
+    const r = await post(a.path, a.body, token, a.auth ?? 'dreame-header').catch(e => ({ status: 0, body: e.message }));
+    const label = a.label ?? a.path.split('/').pop()!;
+    step(`2_devices_${label}`, r);
     if (!did) {
       const records: any[] =
         r.body?.data?.page?.records ?? r.body?.data?.records ??
